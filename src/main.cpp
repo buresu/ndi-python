@@ -3,7 +3,6 @@
 
 #include "PyAudioFrame.hpp"
 #include "PyMetadataFrame.hpp"
-#include "PySendCreate.hpp"
 #include "PySource.hpp"
 #include "PyVideoFrame.hpp"
 
@@ -437,16 +436,34 @@ PYBIND11_MODULE(NDIlib, m) {
         py::arg("instance"), py::arg("times"));
 
   // Processing.NDI.Send
-  py::class_<PySendCreate>(m, "SendCreate")
-      .def(py::init<const std::string &, const std::string &, bool, bool>(),
-           py::arg("ndi_name") = nullptr, py::arg("groups") = nullptr,
+  py::class_<NDIlib_send_create_t>(m, "SendCreate")
+      .def(py::init<const char *, const char *, bool, bool>(),
+           py::arg("p_ndi_name") = nullptr, py::arg("p_groups") = nullptr,
            py::arg("clock_video") = true, py::arg("clock_audio") = true)
-      .def_property("ndi_name", &PySendCreate::getNdiName,
-                    &PySendCreate::setNdiName)
-      .def_property("groups", &PySendCreate::getGroups,
-                    &PySendCreate::setGroups)
-      .def_readwrite("clock_video", &PySendCreate::clock_video)
-      .def_readwrite("clock_audio", &PySendCreate::clock_audio);
+      .def_property(
+          "ndi_name",
+          [](const NDIlib_send_create_t &self) {
+            auto ustr = PyUnicode_DecodeLocale(self.p_ndi_name, nullptr);
+            return py::reinterpret_steal<py::str>(ustr);
+          },
+          [](NDIlib_send_create_t &self, const char *name) {
+            static std::unordered_map<NDIlib_send_create_t *, std::string> strs;
+            strs[&self] = py::str(name);
+            self.p_ndi_name = strs[&self].c_str();
+          })
+      .def_property(
+          "groups",
+          [](const NDIlib_send_create_t &self) {
+            auto ustr = PyUnicode_DecodeLocale(self.p_groups, nullptr);
+            return py::reinterpret_steal<py::str>(ustr);
+          },
+          [](NDIlib_send_create_t &self, const std::string &groups) {
+            static std::unordered_map<NDIlib_send_create_t *, std::string> strs;
+            strs[&self] = py::str(groups);
+            self.p_groups = strs[&self].c_str();
+          })
+      .def_readwrite("clock_video", &NDIlib_send_create_t::clock_video)
+      .def_readwrite("clock_audio", &NDIlib_send_create_t::clock_audio);
 
   m.def("send_create", &NDIlib_send_create,
         py::arg("create_settings") = nullptr);
