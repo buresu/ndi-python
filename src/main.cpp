@@ -15,7 +15,8 @@ PYBIND11_MODULE(NDIlib, m) {
     FRAME_TYPE_AUDIO = NDIlib_frame_type_audio,
     FRAME_TYPE_METADATA = NDIlib_frame_type_metadata,
     FRAME_TYPE_ERROR = NDIlib_frame_type_error,
-    FRANE_TYPE_STATUS_CHANGE = NDIlib_frame_type_status_change
+    FRANE_TYPE_STATUS_CHANGE = NDIlib_frame_type_status_change,
+    FRAME_TYPE_MAX = NDIlib_frame_type_max
   };
 
   py::enum_<FrameType>(m, "FrameType", py::arithmetic())
@@ -25,37 +26,55 @@ PYBIND11_MODULE(NDIlib, m) {
       .value("FRAME_TYPE_METADATA", FrameType::FRAME_TYPE_METADATA)
       .value("FRAME_TYPE_ERROR", FrameType::FRAME_TYPE_ERROR)
       .value("FRANE_TYPE_STATUS_CHANGE", FrameType::FRANE_TYPE_STATUS_CHANGE)
+      .value("FRAME_TYPE_MAX", FrameType::FRAME_TYPE_MAX)
       .export_values();
 
-  enum FourCCType {
-    FOURCC_TYPE_UYVY = NDIlib_FourCC_type_UYVY,
-    FOURCC_TYPE_YV12 = NDIlib_FourCC_type_YV12,
-    FOURCC_TYPE_NV12 = NDIlib_FourCC_type_NV12,
-    FOURCC_TYPE_I420 = NDIlib_FourCC_type_I420,
-    FOURCC_TYPE_BGRA = NDIlib_FourCC_type_BGRA,
-    FOURCC_TYPE_BGRX = NDIlib_FourCC_type_BGRX,
-    FOURCC_TYPE_RGBA = NDIlib_FourCC_type_RGBA,
-    FOURCC_TYPE_RGBX = NDIlib_FourCC_type_RGBX,
-    FOURCC_TYPE_UYVA = NDIlib_FourCC_type_UYVA,
+  enum FourCCVideoType {
+    FOURCC_VIDEO_TYPE_UYVY = NDIlib_FourCC_video_type_UYVY,
+    FOURCC_VIDEO_TYPE_UYVA = NDIlib_FourCC_video_type_UYVA,
+    FOURCC_VIDEO_TYPE_P216 = NDIlib_FourCC_video_type_P216,
+    FOURCC_VIDEO_TYPE_PA16 = NDIlib_FourCC_video_type_PA16,
+    FOURCC_VIDEO_TYPE_YV12 = NDIlib_FourCC_video_type_YV12,
+    FOURCC_VIDEO_TYPE_I420 = NDIlib_FourCC_video_type_I420,
+    FOURCC_VIDEO_TYPE_NV12 = NDIlib_FourCC_video_type_NV12,
+    FOURCC_VIDEO_TYPE_BGRA = NDIlib_FourCC_video_type_BGRA,
+    FOURCC_VIDEO_TYPE_BGRX = NDIlib_FourCC_video_type_BGRX,
+    FOURCC_VIDEO_TYPE_RGBA = NDIlib_FourCC_video_type_RGBA,
+    FOURCC_VIDEO_TYPE_RGBX = NDIlib_FourCC_video_type_RGBX,
+    FOURCC_VIDEO_TYPE_MAX = NDIlib_FourCC_video_type_max,
   };
 
-  py::enum_<FourCCType>(m, "FourCCType", py::arithmetic())
-      .value("FOURCC_TYPE_UYVY", FourCCType::FOURCC_TYPE_UYVY)
-      .value("FOURCC_TYPE_YV12", FourCCType::FOURCC_TYPE_YV12)
-      .value("FOURCC_TYPE_NV12", FourCCType::FOURCC_TYPE_NV12)
-      .value("FOURCC_TYPE_I420", FourCCType::FOURCC_TYPE_I420)
-      .value("FOURCC_TYPE_BGRA", FourCCType::FOURCC_TYPE_BGRA)
-      .value("FOURCC_TYPE_BGRX", FourCCType::FOURCC_TYPE_BGRX)
-      .value("FOURCC_TYPE_RGBA", FourCCType::FOURCC_TYPE_RGBA)
-      .value("FOURCC_TYPE_RGBX", FourCCType::FOURCC_TYPE_RGBX)
-      .value("FOURCC_TYPE_UYVA", FourCCType::FOURCC_TYPE_UYVA)
+  py::enum_<FourCCVideoType>(m, "FourCCVideoType", py::arithmetic())
+      .value("FOURCC_VIDEO_TYPE_UYVY", FourCCVideoType::FOURCC_VIDEO_TYPE_UYVY)
+      .value("FOURCC_VIDEO_TYPE_UYVA", FourCCVideoType::FOURCC_VIDEO_TYPE_UYVA)
+      .value("FOURCC_VIDEO_TYPE_P216", FourCCVideoType::FOURCC_VIDEO_TYPE_P216)
+      .value("FOURCC_VIDEO_TYPE_PA16", FourCCVideoType::FOURCC_VIDEO_TYPE_PA16)
+      .value("FOURCC_VIDEO_TYPE_YV12", FourCCVideoType::FOURCC_VIDEO_TYPE_YV12)
+      .value("FOURCC_VIDEO_TYPE_I420", FourCCVideoType::FOURCC_VIDEO_TYPE_I420)
+      .value("FOURCC_VIDEO_TYPE_NV12", FourCCVideoType::FOURCC_VIDEO_TYPE_NV12)
+      .value("FOURCC_VIDEO_TYPE_BGRA", FourCCVideoType::FOURCC_VIDEO_TYPE_BGRA)
+      .value("FOURCC_VIDEO_TYPE_BGRX", FourCCVideoType::FOURCC_VIDEO_TYPE_BGRX)
+      .value("FOURCC_VIDEO_TYPE_RGBA", FourCCVideoType::FOURCC_VIDEO_TYPE_RGBA)
+      .value("FOURCC_VIDEO_TYPE_RGBX", FourCCVideoType::FOURCC_VIDEO_TYPE_RGBX)
+      .value("FOURCC_VIDEO_TYPE_MAX", FourCCVideoType::FOURCC_VIDEO_TYPE_MAX)
+      .export_values();
+
+  enum FourCCAudioType {
+    FOURCC_AUDIO_TYPE_FLTP = NDIlib_FourCC_audio_type_FLTP,
+    FOURCC_AUDIO_TYPE_MAX = NDIlib_FourCC_audio_type_max,
+  };
+
+  py::enum_<FourCCAudioType>(m, "FourCCAudioType", py::arithmetic())
+      .value("FOURCC_AUDIO_TYPE_FLTP", FourCCAudioType::FOURCC_AUDIO_TYPE_FLTP)
+      .value("FOURCC_AUDIO_TYPE_MAX", FourCCAudioType::FOURCC_AUDIO_TYPE_MAX)
       .export_values();
 
   enum FrameFormatType {
     FRAME_FORMAT_TYPE_PROGRESSIVE = NDIlib_frame_format_type_progressive,
     FRAME_FORMAT_TYPE_INTERLEAVED = NDIlib_frame_format_type_interleaved,
     FRAME_FORMAT_TYPE_FIELD_0 = NDIlib_frame_format_type_field_0,
-    FRAME_FORMAT_TYPE_FIELD_1 = NDIlib_frame_format_type_field_1
+    FRAME_FORMAT_TYPE_FIELD_1 = NDIlib_frame_format_type_field_1,
+    FRAME_FORMAT_TYPE_MAX = NDIlib_frame_format_type_max
   };
 
   py::enum_<FrameFormatType>(m, "FrameFormatType", py::arithmetic())
@@ -67,6 +86,7 @@ PYBIND11_MODULE(NDIlib, m) {
              FrameFormatType::FRAME_FORMAT_TYPE_FIELD_0)
       .value("FRAME_FORMAT_TYPE_FIELD_1",
              FrameFormatType::FRAME_FORMAT_TYPE_FIELD_1)
+      .value("FRAME_FORMAT_TYPE_MAX", FrameFormatType::FRAME_FORMAT_TYPE_MAX)
       .export_values();
 
   m.attr("SEND_TIMECODE_SYNTHESIZE") = py::int_(INT64_MAX);
