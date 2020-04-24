@@ -364,13 +364,35 @@ PYBIND11_MODULE(NDIlib, m) {
   m.def("recv_connect", &NDIlib_recv_connect, py::arg("instance"),
         py::arg("source") = nullptr);
 
-  m.def("recv_capture_v2", &NDIlib_recv_capture_v2, py::arg("instance"),
-        py::arg("video_data"), py::arg("audio_data"), py::arg("metadata"),
-        py::arg("timeout_in_ms"));
+  m.def(
+      "recv_capture_v2",
+      [](NDIlib_recv_instance_t p_instance, uint32_t timeout_in_ms) {
+        NDIlib_video_frame_v2_t video_frame;
+        NDIlib_audio_frame_v2_t audio_frame;
+        NDIlib_metadata_frame_t metadata_frame;
+        auto type =
+            NDIlib_recv_capture_v2(p_instance, &video_frame, &audio_frame,
+                                   &metadata_frame, timeout_in_ms);
+        return std::tuple<NDIlib_frame_type_e, NDIlib_video_frame_v2_t,
+                          NDIlib_audio_frame_v2_t, NDIlib_metadata_frame_t>(
+            type, video_frame, audio_frame, metadata_frame);
+      },
+      py::arg("instance"), py::arg("timeout_in_ms"));
 
-  m.def("recv_capture_v3", &NDIlib_recv_capture_v3, py::arg("instance"),
-        py::arg("video_data"), py::arg("audio_data"), py::arg("metadata"),
-        py::arg("timeout_in_ms"));
+  m.def(
+      "recv_capture_v3",
+      [](NDIlib_recv_instance_t p_instance, uint32_t timeout_in_ms) {
+        NDIlib_video_frame_v2_t video_frame;
+        NDIlib_audio_frame_v3_t audio_frame;
+        NDIlib_metadata_frame_t metadata_frame;
+        auto type =
+            NDIlib_recv_capture_v3(p_instance, &video_frame, &audio_frame,
+                                   &metadata_frame, timeout_in_ms);
+        return std::tuple<NDIlib_frame_type_e, NDIlib_video_frame_v2_t,
+                          NDIlib_audio_frame_v3_t, NDIlib_metadata_frame_t>(
+            type, video_frame, audio_frame, metadata_frame);
+      },
+      py::arg("instance"), py::arg("timeout_in_ms"));
 
   m.def("recv_free_video_v2", &NDIlib_recv_free_video_v2, py::arg("instance"),
         py::arg("video_data"));
