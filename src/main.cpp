@@ -1,6 +1,7 @@
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 
+#include "PyMetadataFrame.hpp"
 #include "PySource.hpp"
 #include "PyVideoFrame.hpp"
 
@@ -148,13 +149,14 @@ PYBIND11_MODULE(NDIlib, m) {
       .def_readwrite("metadata", &NDIlib_audio_frame_v2_t::p_metadata)
       .def_readwrite("timestamp", &NDIlib_audio_frame_v2_t::timestamp);
 
-  py::class_<NDIlib_metadata_frame_t>(m, "MetadataFrame")
-      .def(py::init<int, int64_t, char *>(), py::arg("length") = 0,
+  py::class_<PyMetadataFrame>(m, "MetadataFrame")
+      .def(py::init<int, int64_t, const std::string &>(), py::arg("length") = 0,
            py::arg("timecode") = NDIlib_send_timecode_synthesize,
            py::arg("data") = nullptr)
-      .def_readwrite("length", &NDIlib_metadata_frame_t::length)
-      .def_readwrite("timecode", &NDIlib_metadata_frame_t::timecode)
-      .def_readwrite("data", &NDIlib_metadata_frame_t::p_data);
+      .def_readwrite("length", &PyMetadataFrame::length)
+      .def_readwrite("timecode", &PyMetadataFrame::timecode)
+      .def_property("data", &PyMetadataFrame::getData,
+                    &PyMetadataFrame::setData);
 
   py::class_<NDIlib_tally_t>(m, "Tally")
       .def(py::init<bool, bool>(), py::arg("on_program") = false,
