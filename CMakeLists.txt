@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.1)
 
 project(NDIlib VERSION 3.8.0)
 
-set(PYBIND11_CPP_STANDARD -std=c++14)
+set(PYBIND11_CPP_STANDARD -std=c++17)
 
 add_subdirectory("lib/pybind11")
 
