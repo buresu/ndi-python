@@ -1,6 +1,6 @@
 #include <pybind11/pybind11.h>
 
-#include <Processing.NDI.Lib.h>
+#include "PySource.hpp"
 
 namespace py = pybind11;
 
@@ -93,11 +93,12 @@ PYBIND11_MODULE(NDIlib, m) {
 
   m.attr("RECV_TIMESTAMP_UNDEFINED") = py::int_(INT64_MAX);
 
-  py::class_<NDIlib_source_t>(m, "Source")
-      .def(py::init<const char *, const char *>(),
+  py::class_<PySource>(m, "Source")
+      .def(py::init<const std::string &, const std::string &>(),
            py::arg("ndi_name") = nullptr, py::arg("url_address") = nullptr)
-      .def_readwrite("ndi_name", &NDIlib_source_t::p_ndi_name)
-      .def_readwrite("url_address", &NDIlib_source_t::p_url_address);
+      .def_property("ndi_name", &PySource::getNdiName, &PySource::setNdiName)
+      .def_property("url_address", &PySource::getUrlAddress,
+                    &PySource::setUrlAddress);
 
   py::class_<NDIlib_video_frame_v2_t>(m, "VideoFrameV2")
       .def(py::init<int, int, NDIlib_FourCC_type_e, int, int, float,
