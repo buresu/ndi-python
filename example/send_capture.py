@@ -1,22 +1,22 @@
 import sys
 import time
 import numpy as np
-import cv2
-import NDIlib
+import cv2 as cv
+import NDIlib as ndi
 
 def main():
 
-    if not NDIlib.initialize():
+    if not ndi.initialize():
         return 0
 
-    cap = cv2.VideoCapture(0)
+    cap = cv.VideoCapture(0)
 
-    send_settings = NDIlib.SendCreate()
-    send_settings.p_ndi_name = b'ndi-python'
+    send_settings = ndi.SendCreate()
+    send_settings.ndi_name = 'ndi-python'
 
-    ndi_send = NDIlib.send_create(send_settings)
+    ndi_send = ndi.send_create(send_settings)
 
-    video_frame = NDIlib.VideoFrameV2()
+    video_frame = ndi.VideoFrameV2()
 
     start = time.time()
     while time.time() - start < 60 * 5:
@@ -27,22 +27,18 @@ def main():
             ret, img = cap.read()
 
             if ret:
-                h, w = img.shape[:2]
-                img = cv2.cvtColor(img, cv2.COLOR_BGR2BGRA)
+                img = cv.cvtColor(img, cv.COLOR_BGR2BGRA)
 
-                video_frame.xres = w
-                video_frame.yres = h
-                video_frame.p_data = img.ctypes.data_as(NDIlib.POINTER(NDIlib.c_uint8))
-                video_frame.FourCC = NDIlib.FOURCC_TYPE_BGRX
-                video_frame.line_stride_in_bytes = w * 4
+                video_frame.data = img
+                video_frame.FourCC = ndi.FOURCC_TYPE_BGRX
 
-                NDIlib.send_send_video_v2(ndi_send, video_frame)
+                ndi.send_send_video_v2(ndi_send, video_frame)
 
         print('200 frames sent, at %1.2ffps' % (200.0 / (time.time() - start_send)))
 
-    NDIlib.send_destroy(ndi_send)
+    ndi.send_destroy(ndi_send)
 
-    NDIlib.destroy()
+    ndi.destroy()
 
     return 0
 
