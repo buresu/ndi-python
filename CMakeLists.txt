@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1)
 
-project(NDIlib VERSION 3.8.0)
+project(NDIlib VERSION 4.5.1)
 
 set(PYBIND11_CPP_STANDARD -std=c++17)
 
