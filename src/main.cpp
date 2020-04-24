@@ -685,8 +685,18 @@ PYBIND11_MODULE(NDIlib, m) {
         py::arg("instance"), py::arg("audio_data"), py::arg("sample_rate"),
         py::arg("no_channels"), py::arg("no_samples"));
 
+  m.def("framesync_capture_audio_v2", &NDIlib_framesync_capture_audio_v2,
+        py::arg("instance"), py::arg("audio_data"), py::arg("sample_rate"),
+        py::arg("no_channels"), py::arg("no_samples"));
+
   m.def("framesync_free_audio", &NDIlib_framesync_free_audio,
         py::arg("instance"), py::arg("audio_data"));
+
+  m.def("framesync_free_audio_v2", &NDIlib_framesync_free_audio_v2,
+        py::arg("instance"), py::arg("audio_data"));
+
+  m.def("framesync_audio_queue_depth", &NDIlib_framesync_audio_queue_depth,
+        py::arg("instance"));
 
   m.def("framesync_capture_video", &NDIlib_framesync_capture_video,
         py::arg("instance"), py::arg("video_data"),
