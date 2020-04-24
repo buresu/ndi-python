@@ -22,7 +22,7 @@ def main():
     while time.time() - start < 60 * 5:
         start_send = time.time()
 
-        for idx in reversed(range(200)):
+        for _ in reversed(range(200)):
 
             ret, img = cap.read()
 
