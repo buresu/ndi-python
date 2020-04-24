@@ -170,8 +170,8 @@ PYBIND11_MODULE(NDIlib, m) {
            py::arg("no_samples") = 0,
            py::arg("timecode") = NDIlib_send_timecode_synthesize,
            py::arg("FourCC") = NDIlib_FourCC_audio_type_FLTP,
-           py::arg("data") = 0, py::arg("channel_stride_in_bytes") = 0,
-           py::arg("metadata") = nullptr, py::arg("timestamp") = 0)
+           py::arg("p_data") = 0, py::arg("channel_stride_in_bytes") = 0,
+           py::arg("p_metadata") = nullptr, py::arg("timestamp") = 0)
       .def_readwrite("sample_rate", &NDIlib_audio_frame_v3_t::sample_rate)
       .def_readwrite("no_channels", &NDIlib_audio_frame_v3_t::no_channels)
       .def_readwrite("no_samples", &NDIlib_audio_frame_v3_t::no_samples)
@@ -237,12 +237,32 @@ PYBIND11_MODULE(NDIlib, m) {
   // Processing.NDI.Find
   py::class_<NDIlib_find_create_t>(m, "FindCreate")
       .def(py::init<bool, const char *, const char *>(),
-           py::arg("show_local_sources") = true, py::arg("groups") = nullptr,
-           py::arg("extra_ips") = nullptr)
+           py::arg("show_local_sources") = true, py::arg("p_groups") = nullptr,
+           py::arg("p_extra_ips") = nullptr)
       .def_readwrite("show_local_sources",
                      &NDIlib_find_create_t::show_local_sources)
-      .def_readwrite("groups", &NDIlib_find_create_t::p_groups)
-      .def_readwrite("extra_ips", &NDIlib_find_create_t::p_extra_ips);
+      .def_property(
+          "groups",
+          [](const NDIlib_find_create_t &self) {
+            auto ustr = PyUnicode_DecodeLocale(self.p_groups, nullptr);
+            return py::reinterpret_steal<py::str>(ustr);
+          },
+          [](NDIlib_find_create_t &self, const std::string &groups) {
+            static std::unordered_map<NDIlib_find_create_t *, std::string> strs;
+            strs[&self] = py::str(groups);
+            self.p_groups = strs[&self].c_str();
+          })
+      .def_property(
+          "extra_ips",
+          [](const NDIlib_find_create_t &self) {
+            auto ustr = PyUnicode_DecodeLocale(self.p_extra_ips, nullptr);
+            return py::reinterpret_steal<py::str>(ustr);
+          },
+          [](NDIlib_find_create_t &self, const std::string &extra_ips) {
+            static std::unordered_map<NDIlib_find_create_t *, std::string> strs;
+            strs[&self] = py::str(extra_ips);
+            self.p_extra_ips = strs[&self].c_str();
+          });
 
   m.def("find_create_v2", &NDIlib_find_create_v2,
         py::arg("create_settings") = nullptr);
