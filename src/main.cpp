@@ -1,6 +1,7 @@
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 
+#include "PyAudioFrame.hpp"
 #include "PyMetadataFrame.hpp"
 #include "PySource.hpp"
 #include "PyVideoFrame.hpp"
@@ -131,23 +132,24 @@ PYBIND11_MODULE(NDIlib, m) {
                     &PyVideoFrameV2::setMetadata)
       .def_readwrite("timestamp", &PyVideoFrameV2::timestamp);
 
-  py::class_<NDIlib_audio_frame_v2_t>(m, "AudioFrameV2")
-      .def(py::init<int, int, int, int64_t, float *, int, const char *,
+  py::class_<PyAudioFrameV2>(m, "AudioFrameV2")
+      .def(py::init<int, int, int, int64_t, float *, int, const std::string &,
                     int64_t>(),
            py::arg("sample_rate") = 48000, py::arg("no_channels") = 2,
            py::arg("no_samples") = 0,
            py::arg("timecode") = NDIlib_send_timecode_synthesize,
-           py::arg("data") = NULL, py::arg("channel_stride_in_bytes") = 0,
+           py::arg("data") = nullptr, py::arg("channel_stride_in_bytes") = 0,
            py::arg("metadata") = nullptr, py::arg("timestamp") = 0)
-      .def_readwrite("sample_rate", &NDIlib_audio_frame_v2_t::sample_rate)
-      .def_readwrite("no_channels", &NDIlib_audio_frame_v2_t::no_channels)
-      .def_readwrite("no_samples", &NDIlib_audio_frame_v2_t::no_samples)
-      .def_readwrite("timecode", &NDIlib_audio_frame_v2_t::timecode)
-      .def_readwrite("data", &NDIlib_audio_frame_v2_t::p_data)
+      .def_readwrite("sample_rate", &PyAudioFrameV2::sample_rate)
+      .def_readwrite("no_channels", &PyAudioFrameV2::no_channels)
+      .def_readwrite("no_samples", &PyAudioFrameV2::no_samples)
+      .def_readwrite("timecode", &PyAudioFrameV2::timecode)
+      .def_property("data", nullptr, &PyAudioFrameV2::setData)
       .def_readwrite("channel_stride_in_bytes",
                      &NDIlib_audio_frame_v2_t::channel_stride_in_bytes)
-      .def_readwrite("metadata", &NDIlib_audio_frame_v2_t::p_metadata)
-      .def_readwrite("timestamp", &NDIlib_audio_frame_v2_t::timestamp);
+      .def_property("metadata", &PyAudioFrameV2::getMetadata,
+                    &PyAudioFrameV2::setMetadata)
+      .def_readwrite("timestamp", &PyAudioFrameV2::timestamp);
 
   py::class_<PyMetadataFrame>(m, "MetadataFrame")
       .def(py::init<int, int64_t, const std::string &>(), py::arg("length") = 0,
