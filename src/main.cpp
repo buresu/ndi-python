@@ -582,7 +582,7 @@ PYBIND11_MODULE(NDIlib, m) {
            py::arg("sample_rate") = 48000, py::arg("no_channels") = 2,
            py::arg("no_samples") = 0,
            py::arg("timecode") = NDIlib_send_timecode_synthesize,
-           py::arg("reference_level") = 0, py::arg("data") = NULL)
+           py::arg("reference_level") = 0, py::arg("p_data") = 0)
       .def_readwrite("sample_rate",
                      &NDIlib_audio_frame_interleaved_16s_t::sample_rate)
       .def_readwrite("no_channels",
@@ -601,7 +601,7 @@ PYBIND11_MODULE(NDIlib, m) {
            py::arg("sample_rate") = 48000, py::arg("no_channels") = 2,
            py::arg("no_samples") = 0,
            py::arg("timecode") = NDIlib_send_timecode_synthesize,
-           py::arg("reference_level") = 0, py::arg("data") = NULL)
+           py::arg("reference_level") = 0, py::arg("p_data") = 0)
       .def_readwrite("sample_rate",
                      &NDIlib_audio_frame_interleaved_32s_t::sample_rate)
       .def_readwrite("no_channels",
@@ -620,7 +620,7 @@ PYBIND11_MODULE(NDIlib, m) {
            py::arg("sample_rate") = 48000, py::arg("no_channels") = 2,
            py::arg("no_samples") = 0,
            py::arg("timecode") = NDIlib_send_timecode_synthesize,
-           py::arg("data") = NULL)
+           py::arg("p_data") = 0)
       .def_readwrite("sample_rate",
                      &NDIlib_audio_frame_interleaved_32f_t::sample_rate)
       .def_readwrite("no_channels",
@@ -666,6 +666,12 @@ PYBIND11_MODULE(NDIlib, m) {
   m.def("util_audio_from_interleaved_32f_v2",
         &NDIlib_util_audio_from_interleaved_32f_v2, py::arg("src"),
         py::arg("dst"));
+
+  m.def("util_V210_to_P216", &NDIlib_util_V210_to_P216, py::arg("src_v210"),
+        py::arg("dst_p216"));
+
+  m.def("util_P216_to_V210", &NDIlib_util_P216_to_V210, py::arg("src_p216"),
+        py::arg("dst_v210"));
 
   // Processing.NDI.deprecated
   // TODO
