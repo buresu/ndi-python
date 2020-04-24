@@ -30,7 +30,7 @@ def main():
                 img = cv.cvtColor(img, cv.COLOR_BGR2BGRA)
 
                 video_frame.data = img
-                video_frame.FourCC = ndi.FOURCC_TYPE_BGRX
+                video_frame.FourCC = ndi.FOURCC_VIDEO_TYPE_BGRX
 
                 ndi.send_send_video_v2(ndi_send, video_frame)
 
