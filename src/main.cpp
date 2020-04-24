@@ -269,8 +269,17 @@ PYBIND11_MODULE(NDIlib, m) {
 
   m.def("find_destroy", &NDIlib_find_destroy, py::arg("instance"));
 
-  m.def("find_get_current_sources", &NDIlib_find_get_current_sources,
-        py::arg("instance"), py::arg("no_sources"));
+  m.def(
+      "find_get_current_sources",
+      [](NDIlib_find_instance_t p_instance) {
+        uint32_t count = 0;
+        auto sources = NDIlib_find_get_current_sources(p_instance, &count);
+        py::list out;
+        for (uint32_t i = 0; i < count; ++i)
+          out.append(sources + i);
+        return out;
+      },
+      py::arg("instance"));
 
   m.def("find_wait_for_sources", &NDIlib_find_wait_for_sources,
         py::arg("instance"), py::arg("timeout_in_ms"));
