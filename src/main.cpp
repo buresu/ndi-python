@@ -103,7 +103,16 @@ PYBIND11_MODULE(NDIlib, m) {
                      &NDIlib_video_frame_v2_t::frame_format_type)
       .def_readwrite("timecode", &NDIlib_video_frame_v2_t::timecode)
       .def_property(
-          "data", nullptr,
+          "data",
+          [](const NDIlib_video_frame_v2_t &self) {
+            auto buffer_info =
+                py::buffer_info(self.p_data, sizeof(uint8_t),
+                                py::format_descriptor<uint8_t>::format(), 3,
+                                {self.yres, self.xres, 4},
+                                {sizeof(uint8_t) * self.xres * 4,
+                                 sizeof(uint8_t) * 4, sizeof(uint8_t)});
+            return py::array(buffer_info);
+          },
           [](NDIlib_video_frame_v2_t &self, const py::array_t<uint8_t> &array) {
             auto info = array.request();
             self.p_data = reinterpret_cast<uint8_t *>(info.ptr);
