@@ -1,7 +1,7 @@
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 
-#include "PyAudioFrame.hpp"
+#include <Processing.NDI.Lib.h>
 
 namespace py = pybind11;
 
@@ -129,45 +129,79 @@ PYBIND11_MODULE(NDIlib, m) {
           })
       .def_readwrite("timestamp", &NDIlib_video_frame_v2_t::timestamp);
 
-  py::class_<PyAudioFrameV2>(m, "AudioFrameV2")
-      .def(py::init<int, int, int, int64_t, float *, int, const std::string &,
+  py::class_<NDIlib_audio_frame_v2_t>(m, "AudioFrameV2")
+      .def(py::init<>())
+      /*.def(py::init<int, int, int, int64_t, float *, int, const char *,
                     int64_t>(),
            py::arg("sample_rate") = 48000, py::arg("no_channels") = 2,
            py::arg("no_samples") = 0,
            py::arg("timecode") = NDIlib_send_timecode_synthesize,
-           py::arg("data") = nullptr, py::arg("channel_stride_in_bytes") = 0,
-           py::arg("metadata") = nullptr, py::arg("timestamp") = 0)
-      .def_readwrite("sample_rate", &PyAudioFrameV2::sample_rate)
-      .def_readwrite("no_channels", &PyAudioFrameV2::no_channels)
-      .def_readwrite("no_samples", &PyAudioFrameV2::no_samples)
-      .def_readwrite("timecode", &PyAudioFrameV2::timecode)
-      .def_property("data", nullptr, &PyAudioFrameV2::setData)
+           py::arg("p_data") = NULL, py::arg("channel_stride_in_bytes") = 0,
+           py::arg("p_metadata") = NULL, py::arg("timestamp") = 0)*/
+      .def_readwrite("sample_rate", &NDIlib_audio_frame_v2_t::sample_rate)
+      .def_readwrite("no_channels", &NDIlib_audio_frame_v2_t::no_channels)
+      .def_readwrite("no_samples", &NDIlib_audio_frame_v2_t::no_samples)
+      .def_readwrite("timecode", &NDIlib_audio_frame_v2_t::timecode)
+      .def_property(
+          "data", nullptr,
+          [](NDIlib_audio_frame_v2_t &self, py::array_t<float *> &array) {
+            auto info = array.request();
+            self.p_data = reinterpret_cast<float *>(info.ptr);
+            self.channel_stride_in_bytes = info.strides[0];
+          })
       .def_readwrite("channel_stride_in_bytes",
-                     &PyAudioFrameV2::channel_stride_in_bytes)
-      .def_property("metadata", &PyAudioFrameV2::getMetadata,
-                    &PyAudioFrameV2::setMetadata)
-      .def_readwrite("timestamp", &PyAudioFrameV2::timestamp);
+                     &NDIlib_audio_frame_v2_t::channel_stride_in_bytes)
+      .def_property(
+          "metadata",
+          [](const NDIlib_audio_frame_v2_t &self) {
+            auto ustr = PyUnicode_DecodeLocale(self.p_metadata, nullptr);
+            return py::reinterpret_steal<py::str>(ustr);
+          },
+          [](NDIlib_audio_frame_v2_t &self, const std::string &data) {
+            static std::unordered_map<NDIlib_audio_frame_v2_t *, std::string>
+                strs;
+            strs[&self] = py::str(data);
+            self.p_metadata = strs[&self].c_str();
+          })
+      .def_readwrite("timestamp", &NDIlib_audio_frame_v2_t::timestamp);
 
-  py::class_<PyAudioFrameV3>(m, "AudioFrameV3")
-      .def(py::init<int, int, int, int64_t, NDIlib_FourCC_audio_type_e,
+  py::class_<NDIlib_audio_frame_v3_t>(m, "AudioFrameV3")
+      .def(py::init<>())
+      /*.def(py::init<int, int, int, int64_t, NDIlib_FourCC_audio_type_e,
                     uint8_t *, int, const std::string &, int64_t>(),
            py::arg("sample_rate") = 48000, py::arg("no_channels") = 2,
            py::arg("no_samples") = 0,
            py::arg("timecode") = NDIlib_send_timecode_synthesize,
            py::arg("FourCC") = NDIlib_FourCC_audio_type_FLTP,
            py::arg("data") = nullptr, py::arg("channel_stride_in_bytes") = 0,
-           py::arg("metadata") = nullptr, py::arg("timestamp") = 0)
-      .def_readwrite("sample_rate", &PyAudioFrameV3::sample_rate)
-      .def_readwrite("no_channels", &PyAudioFrameV3::no_channels)
-      .def_readwrite("no_samples", &PyAudioFrameV3::no_samples)
-      .def_readwrite("timecode", &PyAudioFrameV3::timecode)
-      .def_readwrite("FourCC", &PyAudioFrameV3::FourCC)
-      .def_property("data", nullptr, &PyAudioFrameV3::setData)
+           py::arg("metadata") = nullptr, py::arg("timestamp") = 0)*/
+      .def_readwrite("sample_rate", &NDIlib_audio_frame_v3_t::sample_rate)
+      .def_readwrite("no_channels", &NDIlib_audio_frame_v3_t::no_channels)
+      .def_readwrite("no_samples", &NDIlib_audio_frame_v3_t::no_samples)
+      .def_readwrite("timecode", &NDIlib_audio_frame_v3_t::timecode)
+      .def_readwrite("FourCC", &NDIlib_audio_frame_v3_t::FourCC)
+      .def_property(
+          "data", nullptr,
+          [](NDIlib_audio_frame_v3_t &self, const py::array_t<uint8_t> &array) {
+            auto info = array.request();
+            self.p_data = reinterpret_cast<uint8_t *>(info.ptr);
+            self.channel_stride_in_bytes = info.strides[0];
+          })
       .def_readwrite("channel_stride_in_bytes",
-                     &PyAudioFrameV3::channel_stride_in_bytes)
-      .def_property("metadata", &PyAudioFrameV3::getMetadata,
-                    &PyAudioFrameV3::setMetadata)
-      .def_readwrite("timestamp", &PyAudioFrameV3::timestamp);
+                     &NDIlib_audio_frame_v3_t::channel_stride_in_bytes)
+      .def_property(
+          "metadata",
+          [](const NDIlib_audio_frame_v3_t &self) {
+            auto ustr = PyUnicode_DecodeLocale(self.p_metadata, nullptr);
+            return py::reinterpret_steal<py::str>(ustr);
+          },
+          [](NDIlib_audio_frame_v3_t &self, const std::string &data) {
+            static std::unordered_map<NDIlib_audio_frame_v3_t *, std::string>
+                strs;
+            strs[&self] = py::str(data);
+            self.p_metadata = strs[&self].c_str();
+          })
+      .def_readwrite("timestamp", &NDIlib_audio_frame_v3_t::timestamp);
 
   py::class_<NDIlib_metadata_frame_t>(m, "MetadataFrame")
       .def(py::init<int, int64_t, char *>(), py::arg("length") = 0,
