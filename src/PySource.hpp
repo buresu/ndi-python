@@ -1,5 +1,6 @@
-#include <Processing.NDI.Lib.h>
 #include <string>
+
+#include <Processing.NDI.Lib.h>
 
 class PySource : public NDIlib_source_t {
 public:

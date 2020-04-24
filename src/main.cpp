@@ -1,6 +1,8 @@
+#include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 
 #include "PySource.hpp"
+#include "PyVideoFrame.hpp"
 
 namespace py = pybind11;
 
@@ -100,33 +102,33 @@ PYBIND11_MODULE(NDIlib, m) {
       .def_property("url_address", &PySource::getUrlAddress,
                     &PySource::setUrlAddress);
 
-  py::class_<NDIlib_video_frame_v2_t>(m, "VideoFrameV2")
+  py::class_<PyVideoFrameV2>(m, "VideoFrameV2")
       .def(py::init<int, int, NDIlib_FourCC_type_e, int, int, float,
                     NDIlib_frame_format_type_e, int64_t, uint8_t *, int,
-                    const char *, int64_t>(),
+                    const std::string &, int64_t>(),
            py::arg("xres") = 0, py::arg("yres") = 0,
-           py::arg("FourCC") = FOURCC_TYPE_UYVY,
+           py::arg("FourCC") = FOURCC_VIDEO_TYPE_UYVY,
            py::arg("frame_rate_N") = 30000, py::arg("frame_rate_D") = 1001,
            py::arg("picture_aspect_ratio") = 0.0f,
            py::arg("frame_format_type") = FRAME_FORMAT_TYPE_PROGRESSIVE,
-           py::arg("timecode") = 0, py::arg("data") = NULL,
+           py::arg("timecode") = 0, py::arg("data") = nullptr,
            py::arg("line_stride_in_bytes") = 0, py::arg("metadata") = nullptr,
            py::arg("timestamp") = 0)
-      .def_readwrite("xres", &NDIlib_video_frame_v2_t::xres)
-      .def_readwrite("yres", &NDIlib_video_frame_v2_t::yres)
-      .def_readwrite("FourCC", &NDIlib_video_frame_v2_t::FourCC)
-      .def_readwrite("frame_rate_N", &NDIlib_video_frame_v2_t::frame_rate_N)
-      .def_readwrite("frame_rate_D", &NDIlib_video_frame_v2_t::frame_rate_D)
+      .def_readwrite("xres", &PyVideoFrameV2::xres)
+      .def_readwrite("yres", &PyVideoFrameV2::yres)
+      .def_readwrite("FourCC", &PyVideoFrameV2::FourCC)
+      .def_readwrite("frame_rate_N", &PyVideoFrameV2::frame_rate_N)
+      .def_readwrite("frame_rate_D", &PyVideoFrameV2::frame_rate_D)
       .def_readwrite("picture_aspect_ratio",
-                     &NDIlib_video_frame_v2_t::picture_aspect_ratio)
-      .def_readwrite("frame_format_type",
-                     &NDIlib_video_frame_v2_t::frame_format_type)
-      .def_readwrite("timecode", &NDIlib_video_frame_v2_t::timecode)
-      .def_readwrite("data", &NDIlib_video_frame_v2_t::p_data)
+                     &PyVideoFrameV2::picture_aspect_ratio)
+      .def_readwrite("frame_format_type", &PyVideoFrameV2::frame_format_type)
+      .def_readwrite("timecode", &PyVideoFrameV2::timecode)
+      .def_property("data", nullptr, &PyVideoFrameV2::setData)
       .def_readwrite("line_stride_in_bytes",
-                     &NDIlib_video_frame_v2_t::line_stride_in_bytes)
-      .def_readwrite("metadata", &NDIlib_video_frame_v2_t::p_metadata)
-      .def_readwrite("timestamp", &NDIlib_video_frame_v2_t::timestamp);
+                     &PyVideoFrameV2::line_stride_in_bytes)
+      .def_property("metadata", &PyVideoFrameV2::getMetadata,
+                    &PyVideoFrameV2::setMetadata)
+      .def_readwrite("timestamp", &PyVideoFrameV2::timestamp);
 
   py::class_<NDIlib_audio_frame_v2_t>(m, "AudioFrameV2")
       .def(py::init<int, int, int, int64_t, float *, int, const char *,
