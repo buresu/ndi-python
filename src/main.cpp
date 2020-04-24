@@ -276,78 +276,63 @@ PYBIND11_MODULE(NDIlib, m) {
         py::arg("instance"), py::arg("timeout_in_ms"));
 
   // Processing.NDI.Recv
-  enum RecvBandwidth {
-    RECV_BANDWIDTH_METADATA_ONLY = NDIlib_recv_bandwidth_metadata_only,
-    RECV_BANDWIDTH_AUDIO_ONLY = NDIlib_recv_bandwidth_audio_only,
-    RECV_BANDWIDTH_LOWEST = NDIlib_recv_bandwidth_lowest,
-    RECV_BANDWIDTH_HIGHEST = NDIlib_recv_bandwidth_highest
-  };
-
-  py::enum_<RecvBandwidth>(m, "RecvBandwidth", py::arithmetic())
+  py::enum_<NDIlib_recv_bandwidth_e>(m, "RecvBandwidth", py::arithmetic())
       .value("RECV_BANDWIDTH_METADATA_ONLY",
-             RecvBandwidth::RECV_BANDWIDTH_METADATA_ONLY)
-      .value("RECV_BANDWIDTH_AUDIO_ONLY",
-             RecvBandwidth::RECV_BANDWIDTH_AUDIO_ONLY)
-      .value("RECV_BANDWIDTH_LOWEST", RecvBandwidth::RECV_BANDWIDTH_LOWEST)
-      .value("RECV_BANDWIDTH_HIGHEST", RecvBandwidth::RECV_BANDWIDTH_HIGHEST)
+             NDIlib_recv_bandwidth_metadata_only)
+      .value("RECV_BANDWIDTH_AUDIO_ONLY", NDIlib_recv_bandwidth_audio_only)
+      .value("RECV_BANDWIDTH_LOWEST", NDIlib_recv_bandwidth_lowest)
+      .value("RECV_BANDWIDTH_HIGHEST", NDIlib_recv_bandwidth_highest)
+      .value("RECV_BANDWIDTH_MAX", NDIlib_recv_bandwidth_max)
       .export_values();
 
-  enum RecvColorFormat {
-    RECV_COLOR_FORMAT_BGRX_BGRA = NDIlib_recv_color_format_BGRX_BGRA,
-    RECV_COLOR_FORMAT_UYVY_BGRA = NDIlib_recv_color_format_UYVY_BGRA,
-    RECV_COLOR_FORMAT_RGBX_RGBA = NDIlib_recv_color_format_RGBX_RGBA,
-    RECV_COLOR_FORMAT_UYVY_RGBA = NDIlib_recv_color_format_UYVY_RGBA,
-#ifdef _WIN32
-    RECV_COLOR_FORMAT_BGRX_BGRA_FLIPPED =
-        NDIlib_recv_color_format_BGRX_BGRA_flipped,
-#endif
-    RECV_COLOR_FORMAT_FASTEST = NDIlib_recv_color_format_fastest,
-    RECV_COLOR_FORMAT_E_BGRX_BGRA = NDIlib_recv_color_format_e_BGRX_BGRA,
-    RECV_COLOR_FORMAT_E_UYVY_BGRA = NDIlib_recv_color_format_e_UYVY_BGRA,
-    RECV_COLOR_FORMAT_E_RGBX_RGBA = NDIlib_recv_color_format_e_RGBX_RGBA,
-    RECV_COLOR_FORMAT_E_UYVY_RGBA = NDIlib_recv_color_format_e_UYVY_RGBA
-  };
-
-  py::enum_<RecvColorFormat>(m, "RecvColorFormat", py::arithmetic())
-      .value("RECV_COLOR_FORMAT_BGRX_BGRA",
-             RecvColorFormat::RECV_COLOR_FORMAT_BGRX_BGRA)
-      .value("RECV_COLOR_FORMAT_UYVY_BGRA",
-             RecvColorFormat::RECV_COLOR_FORMAT_UYVY_BGRA)
-      .value("RECV_COLOR_FORMAT_RGBX_RGBA",
-             RecvColorFormat::RECV_COLOR_FORMAT_RGBX_RGBA)
-      .value("RECV_COLOR_FORMAT_UYVY_RGBA",
-             RecvColorFormat::RECV_COLOR_FORMAT_UYVY_RGBA)
+  py::enum_<NDIlib_recv_color_format_e>(m, "RecvColorFormat", py::arithmetic())
+      .value("RECV_COLOR_FORMAT_BGRX_BGRA", NDIlib_recv_color_format_BGRX_BGRA)
+      .value("RECV_COLOR_FORMAT_UYVY_BGRA", NDIlib_recv_color_format_UYVY_BGRA)
+      .value("RECV_COLOR_FORMAT_RGBX_RGBA", NDIlib_recv_color_format_RGBX_RGBA)
+      .value("RECV_COLOR_FORMAT_UYVY_RGBA", NDIlib_recv_color_format_UYVY_RGBA)
+      .value("RECV_COLOR_FORMAT_FASTEST", NDIlib_recv_color_format_fastest)
+      .value("RECV_COLOR_FORMAT_BEST", NDIlib_recv_color_format_best)
+      .value("RECV_COLOR_FORMAT_E_BGRX_BGRA",
+             NDIlib_recv_color_format_e_BGRX_BGRA)
+      .value("RECV_COLOR_FORMAT_E_UYVY_BGRA",
+             NDIlib_recv_color_format_e_UYVY_BGRA)
+      .value("RECV_COLOR_FORMAT_E_RGBX_RGBA",
+             NDIlib_recv_color_format_e_RGBX_RGBA)
+      .value("RECV_COLOR_FORMAT_E_UYVY_RGBA",
+             NDIlib_recv_color_format_e_UYVY_RGBA)
 #ifdef _WIN32
       .value("RECV_COLOR_FORMAT_BGRX_BGRA_FLIPPED",
-             RecvColorFormat::RECV_COLOR_FORMAT_BGRX_BGRA_FLIPPED)
+             1000 + NDIlib_recv_color_format_BGRX_BGRA)
 #endif
-      .value("RECV_COLOR_FORMAT_FASTEST",
-             RecvColorFormat::RECV_COLOR_FORMAT_FASTEST)
-      .value("RECV_COLOR_FORMAT_E_BGRX_BGRA",
-             RecvColorFormat::RECV_COLOR_FORMAT_E_BGRX_BGRA)
-      .value("RECV_COLOR_FORMAT_E_UYVY_BGRA",
-             RecvColorFormat::RECV_COLOR_FORMAT_E_UYVY_BGRA)
-      .value("RECV_COLOR_FORMAT_E_RGBX_RGBA",
-             RecvColorFormat::RECV_COLOR_FORMAT_E_RGBX_RGBA)
-      .value("RECV_COLOR_FORMAT_E_UYVY_RGBA",
-             RecvColorFormat::RECV_COLOR_FORMAT_E_UYVY_RGBA)
+      .value("RECV_COLOR_FORMAT_MAX", NDIlib_recv_color_format_max)
       .export_values();
 
   py::class_<NDIlib_recv_create_v3_t>(m, "RecvCreateV3")
       .def(py::init<const NDIlib_source_t, NDIlib_recv_color_format_e,
                     NDIlib_recv_bandwidth_e, bool, const char *>(),
            py::arg("source_to_connect_to") = NDIlib_source_t(),
-           py::arg("color_format") = RECV_COLOR_FORMAT_UYVY_BGRA,
-           py::arg("bandwidth") = RECV_BANDWIDTH_HIGHEST,
-           py::arg("allow_video_fields") = true, py::arg("ndi_name") = nullptr)
+           py::arg("color_format") = NDIlib_recv_color_format_UYVY_BGRA,
+           py::arg("bandwidth") = NDIlib_recv_bandwidth_highest,
+           py::arg("allow_video_fields") = true,
+           py::arg("p_ndi_recv_name") = nullptr)
       .def_readwrite("source_to_connect_to",
                      &NDIlib_recv_create_v3_t::source_to_connect_to)
       .def_readwrite("color_format", &NDIlib_recv_create_v3_t::color_format)
       .def_readwrite("bandwidth", &NDIlib_recv_create_v3_t::bandwidth)
       .def_readwrite("allow_video_fields",
                      &NDIlib_recv_create_v3_t::allow_video_fields)
-      .def_readwrite("ndi_recv_name",
-                     &NDIlib_recv_create_v3_t::p_ndi_recv_name);
+      .def_property(
+          "ndi_recv_name",
+          [](const NDIlib_recv_create_v3_t &self) {
+            auto ustr = PyUnicode_DecodeLocale(self.p_ndi_recv_name, nullptr);
+            return py::reinterpret_steal<py::str>(ustr);
+          },
+          [](NDIlib_recv_create_v3_t &self, const std::string &ndi_recv_name) {
+            static std::unordered_map<NDIlib_recv_create_v3_t *, std::string>
+                strs;
+            strs[&self] = py::str(ndi_recv_name);
+            self.p_ndi_recv_name = strs[&self].c_str();
+          });
 
   py::class_<NDIlib_recv_performance_t>(m, "RecvPerformance")
       .def(py::init<>())
@@ -374,10 +359,17 @@ PYBIND11_MODULE(NDIlib, m) {
         py::arg("video_data"), py::arg("audio_data"), py::arg("metadata"),
         py::arg("timeout_in_ms"));
 
+  m.def("recv_capture_v3", &NDIlib_recv_capture_v3, py::arg("instance"),
+        py::arg("video_data"), py::arg("audio_data"), py::arg("metadata"),
+        py::arg("timeout_in_ms"));
+
   m.def("recv_free_video_v2", &NDIlib_recv_free_video_v2, py::arg("instance"),
         py::arg("video_data"));
 
   m.def("recv_free_audio_v2", &NDIlib_recv_free_audio_v2, py::arg("instance"),
+        py::arg("audio_data"));
+
+  m.def("recv_free_audio_v3", &NDIlib_recv_free_audio_v3, py::arg("instance"),
         py::arg("audio_data"));
 
   m.def("recv_free_metadata", &NDIlib_recv_free_metadata, py::arg("instance"),
