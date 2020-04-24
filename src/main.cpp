@@ -462,6 +462,9 @@ PYBIND11_MODULE(NDIlib, m) {
   m.def("send_send_audio_v2", &NDIlib_send_send_audio_v2, py::arg("instance"),
         py::arg("audio_data"));
 
+  m.def("send_send_audio_v3", &NDIlib_send_send_audio_v3, py::arg("instance"),
+        py::arg("audio_data"));
+
   m.def("send_send_metadata", &NDIlib_send_send_metadata, py::arg("instance"),
         py::arg("metadata"));
 
