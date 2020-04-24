@@ -2,7 +2,6 @@
 #include <pybind11/pybind11.h>
 
 #include "PyAudioFrame.hpp"
-#include "PyMetadataFrame.hpp"
 #include "PyVideoFrame.hpp"
 
 namespace py = pybind11;
@@ -190,14 +189,24 @@ PYBIND11_MODULE(NDIlib, m) {
                     &PyAudioFrameV3::setMetadata)
       .def_readwrite("timestamp", &PyAudioFrameV3::timestamp);
 
-  py::class_<PyMetadataFrame>(m, "MetadataFrame")
-      .def(py::init<int, int64_t, const std::string &>(), py::arg("length") = 0,
+  py::class_<NDIlib_metadata_frame_t>(m, "MetadataFrame")
+      .def(py::init<int, int64_t, char *>(), py::arg("length") = 0,
            py::arg("timecode") = NDIlib_send_timecode_synthesize,
-           py::arg("data") = nullptr)
-      .def_readwrite("length", &PyMetadataFrame::length)
-      .def_readwrite("timecode", &PyMetadataFrame::timecode)
-      .def_property("data", &PyMetadataFrame::getData,
-                    &PyMetadataFrame::setData);
+           py::arg("p_data") = nullptr)
+      .def_readwrite("length", &NDIlib_metadata_frame_t::length)
+      .def_readwrite("timecode", &NDIlib_metadata_frame_t::timecode)
+      .def_property(
+          "data",
+          [](const NDIlib_metadata_frame_t &self) {
+            auto ustr = PyUnicode_DecodeLocale(self.p_data, nullptr);
+            return py::reinterpret_steal<py::str>(ustr);
+          },
+          [](NDIlib_metadata_frame_t &self, const std::string &data) {
+            static std::unordered_map<NDIlib_metadata_frame_t *, std::string>
+                strs;
+            strs[&self] = py::str(data);
+            self.p_data = strs[&self].data();
+          });
 
   py::class_<NDIlib_tally_t>(m, "Tally")
       .def(py::init<bool, bool>(), py::arg("on_program") = false,
