@@ -3,7 +3,6 @@
 
 #include "PyAudioFrame.hpp"
 #include "PyMetadataFrame.hpp"
-#include "PySource.hpp"
 #include "PyVideoFrame.hpp"
 
 namespace py = pybind11;
@@ -97,12 +96,31 @@ PYBIND11_MODULE(NDIlib, m) {
 
   m.attr("RECV_TIMESTAMP_UNDEFINED") = py::int_(INT64_MAX);
 
-  py::class_<PySource>(m, "Source")
-      .def(py::init<const std::string &, const std::string &>(),
-           py::arg("ndi_name") = nullptr, py::arg("url_address") = nullptr)
-      .def_property("ndi_name", &PySource::getNdiName, &PySource::setNdiName)
-      .def_property("url_address", &PySource::getUrlAddress,
-                    &PySource::setUrlAddress);
+  py::class_<NDIlib_source_t>(m, "Source")
+      .def(py::init<const char *, const char *>(),
+           py::arg("p_ndi_name") = nullptr, py::arg("p_url_address") = nullptr)
+      .def_property(
+          "ndi_name",
+          [](const NDIlib_source_t &self) {
+            auto ustr = PyUnicode_DecodeLocale(self.p_ndi_name, nullptr);
+            return py::reinterpret_steal<py::str>(ustr);
+          },
+          [](NDIlib_source_t &self, const std::string &name) {
+            static std::unordered_map<NDIlib_source_t *, std::string> strs;
+            strs[&self] = py::str(name);
+            self.p_ndi_name = strs[&self].c_str();
+          })
+      .def_property(
+          "url_address",
+          [](const NDIlib_source_t &self) {
+            auto ustr = PyUnicode_DecodeLocale(self.p_url_address, nullptr);
+            return py::reinterpret_steal<py::str>(ustr);
+          },
+          [](NDIlib_source_t &self, const std::string &address) {
+            static std::unordered_map<NDIlib_source_t *, std::string> strs;
+            strs[&self] = py::str(address);
+            self.p_url_address = strs[&self].c_str();
+          });
 
   py::class_<PyVideoFrameV2>(m, "VideoFrameV2")
       .def(py::init<int, int, NDIlib_FourCC_type_e, int, int, float,
