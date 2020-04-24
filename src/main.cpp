@@ -3,6 +3,7 @@
 
 #include "PyAudioFrame.hpp"
 #include "PyMetadataFrame.hpp"
+#include "PySendCreate.hpp"
 #include "PySource.hpp"
 #include "PyVideoFrame.hpp"
 
@@ -436,14 +437,16 @@ PYBIND11_MODULE(NDIlib, m) {
         py::arg("instance"), py::arg("times"));
 
   // Processing.NDI.Send
-  py::class_<NDIlib_send_create_t>(m, "SendCreate")
-      .def(py::init<const char *, const char *, bool, bool>(),
+  py::class_<PySendCreate>(m, "SendCreate")
+      .def(py::init<const std::string &, const std::string &, bool, bool>(),
            py::arg("ndi_name") = nullptr, py::arg("groups") = nullptr,
            py::arg("clock_video") = true, py::arg("clock_audio") = true)
-      .def_readwrite("ndi_name", &NDIlib_send_create_t::p_ndi_name)
-      .def_readwrite("groups", &NDIlib_send_create_t::p_groups)
-      .def_readwrite("clock_video", &NDIlib_send_create_t::clock_video)
-      .def_readwrite("clock_audio", &NDIlib_send_create_t::clock_audio);
+      .def_property("ndi_name", &PySendCreate::getNdiName,
+                    &PySendCreate::setNdiName)
+      .def_property("groups", &PySendCreate::getGroups,
+                    &PySendCreate::setGroups)
+      .def_readwrite("clock_video", &PySendCreate::clock_video)
+      .def_readwrite("clock_audio", &PySendCreate::clock_audio);
 
   m.def("send_create", &NDIlib_send_create,
         py::arg("create_settings") = nullptr);
