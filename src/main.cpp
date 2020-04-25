@@ -225,7 +225,7 @@ PYBIND11_MODULE(NDIlib, m) {
             static std::unordered_map<NDIlib_metadata_frame_t *, std::string>
                 strs;
             strs[&self] = py::str(data);
-            self.p_data = strs[&self].data();
+            self.p_data = &strs[&self][0];
           });
 
   py::class_<NDIlib_tally_t>(m, "Tally")
