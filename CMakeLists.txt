@@ -4,7 +4,7 @@ project(NDIlib VERSION 4.5.1)
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/Modules)
 
-set(PYBIND11_CPP_STANDARD -std=c++17)
+set(PYBIND11_CPP_STANDARD -std=c++14)
 
 add_subdirectory("lib/pybind11")
 
