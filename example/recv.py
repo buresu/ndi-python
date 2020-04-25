@@ -33,8 +33,6 @@ def main():
 
     cv.startWindowThread()
 
-    frame = np.array((1920))
-
     while True:
         t,v,_,_ = ndi.recv_capture_v2(ndi_recv, 5000)
         
