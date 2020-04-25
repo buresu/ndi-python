@@ -319,8 +319,9 @@ PYBIND11_MODULE(NDIlib, m) {
       .value("RECV_COLOR_FORMAT_E_UYVY_RGBA",
              NDIlib_recv_color_format_e_UYVY_RGBA)
 #ifdef _WIN32
-      .value("RECV_COLOR_FORMAT_BGRX_BGRA_FLIPPED",
-             1000 + NDIlib_recv_color_format_BGRX_BGRA)
+      .value(
+          "RECV_COLOR_FORMAT_BGRX_BGRA_FLIPPED",
+          NDIlib_recv_color_format_e(1000 + NDIlib_recv_color_format_BGRX_BGRA))
 #endif
       .value("RECV_COLOR_FORMAT_MAX", NDIlib_recv_color_format_max)
       .export_values();
