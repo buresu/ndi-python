@@ -105,12 +105,14 @@ PYBIND11_MODULE(NDIlib, m) {
       .def_property(
           "data",
           [](const NDIlib_video_frame_v2_t &self) {
-            auto buffer_info =
-                py::buffer_info(self.p_data, sizeof(uint8_t),
-                                py::format_descriptor<uint8_t>::format(), 3,
-                                {self.yres, self.xres, 4},
-                                {sizeof(uint8_t) * self.xres * 4,
-                                 sizeof(uint8_t) * 4, sizeof(uint8_t)});
+            int r = self.yres;
+            int c = self.xres;
+            size_t b1 = self.line_stride_in_bytes;
+            size_t b2 = c > 0 ? b1 / c : 0;
+            size_t b3 = sizeof(uint8_t);
+            auto buffer_info = py::buffer_info(
+                self.p_data, b3, py::format_descriptor<uint8_t>::format(), 3,
+                {r, c, int(b2)}, {b1, b2, b3});
             return py::array(buffer_info);
           },
           [](NDIlib_video_frame_v2_t &self, const py::array_t<uint8_t> &array) {
