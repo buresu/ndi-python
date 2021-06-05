@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.17)
 
 project(NDIlib VERSION 4.5.1)
 
@@ -18,5 +18,12 @@ pybind11_add_module(NDIlib SHARED ${INCLUDES} ${SOURCES})
 target_include_directories(NDIlib PRIVATE ${NDI_INCLUDE_DIR})
 target_link_directories(NDIlib PRIVATE ${NDI_LIBRARY_DIR})
 target_link_libraries(NDIlib PRIVATE pybind11::module ${NDI_LIBS})
+
+set_target_properties(NDIlib PROPERTIES SKIP_RPATH TRUE)
+set_target_properties(NDIlib PROPERTIES BUILD_RPATH_USE_ORIGIN TRUE)
+set_target_properties(NDIlib PROPERTIES SKIP_BUILD_RPATH FALSE)
+set_target_properties(NDIlib PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE)
+set_target_properties(NDIlib PROPERTIES INSTALL_RPATH_USE_LINK_PATH FALSE)
+set_target_properties(NDIlib PROPERTIES INSTALL_RPATH "$ORIGIN")
 
 source_group("" FILES ${SOURCES} ${INCLUDES})
