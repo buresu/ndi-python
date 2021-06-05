@@ -13,6 +13,8 @@ find_package(NDI REQUIRED)
 file(GLOB INCLUDES ${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp)
 file(GLOB SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 
+source_group("" FILES ${SOURCES} ${INCLUDES})
+
 pybind11_add_module(NDIlib SHARED ${INCLUDES} ${SOURCES})
 
 target_include_directories(NDIlib PRIVATE ${NDI_INCLUDE_DIR})
@@ -26,4 +28,16 @@ set_target_properties(NDIlib PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE)
 set_target_properties(NDIlib PROPERTIES INSTALL_RPATH_USE_LINK_PATH FALSE)
 set_target_properties(NDIlib PROPERTIES INSTALL_RPATH "$ORIGIN")
 
-source_group("" FILES ${SOURCES} ${INCLUDES})
+# install
+if(WIN32)
+install(
+  TARGETS NDIlib
+  RUNTIME DESTINATION ${PROJECT_BINARY_DIR}/install
+)
+install(
+  FILES
+  "${NDI_DIR}/Bin/x64/Processing.NDI.Lib.x64.dll"
+  "${NDI_DIR}/Bin/x64/Processing.NDI.Lib.Licenses.txt"
+  DESTINATION ${PROJECT_BINARY_DIR}/install
+)
+endif()
