@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.17)
 
-project(NDIlib VERSION 4.5.1)
+project(NDIlib VERSION 4.6.2)
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/Modules)
 
@@ -29,15 +29,16 @@ set_target_properties(NDIlib PROPERTIES INSTALL_RPATH_USE_LINK_PATH FALSE)
 set_target_properties(NDIlib PROPERTIES INSTALL_RPATH "$ORIGIN")
 
 # install
-if(WIN32)
+set(CMAKE_INSTALL_PREFIX "${PROJECT_SOURCE_DIR}/ndi-python")
 install(
   TARGETS NDIlib
-  RUNTIME DESTINATION ${PROJECT_BINARY_DIR}/install
+  RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}
+  LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
+if(WIN32)
 install(
   FILES
   "${NDI_DIR}/Bin/x64/Processing.NDI.Lib.x64.dll"
   "${NDI_DIR}/Bin/x64/Processing.NDI.Lib.Licenses.txt"
-  DESTINATION ${PROJECT_BINARY_DIR}/install
 )
 endif()
