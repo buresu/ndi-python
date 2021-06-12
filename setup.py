@@ -42,7 +42,7 @@ setup(
         'build_py': build_py,
         'build_ext': build_ext},
     packages=[''],
-    package_data={'':['*.so', '*.dll', '*.dylib']},
+    package_data={'':['*.so', '*.pyd', '*.dll', '*.dylib', '*.txt']},
     include_package_data=False,
     python_requires='>=3.4',
     zip_safe=False

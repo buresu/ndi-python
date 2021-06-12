@@ -40,5 +40,6 @@ install(
   FILES
   "${NDI_DIR}/Bin/x64/Processing.NDI.Lib.x64.dll"
   "${NDI_DIR}/Bin/x64/Processing.NDI.Lib.Licenses.txt"
+  DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
 endif()
