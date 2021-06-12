@@ -12,7 +12,6 @@ class build_ext(_build_ext):
     def run(self):
         for ext in self.extensions:
             self.build_cmake(ext)
-        super().run()
 
     def build_cmake(self, ext):
         cwd = pathlib.Path().absolute()
@@ -42,5 +41,9 @@ setup(
     cmdclass={
         'build_py': build_py,
         'build_ext': build_ext},
-    python_requires='>=3.4'
+    packages=[''],
+    package_data={'':['*.so', '*.dll', '*.dylib']},
+    include_package_data=False,
+    python_requires='>=3.4',
+    zip_safe=False
 )
