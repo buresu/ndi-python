@@ -7,7 +7,7 @@ namespace py = pybind11;
 
 PYBIND11_MODULE(NDIlib, m) {
 
-  m.doc() = "NDI Plugin";
+  m.doc() = "NDI SDK for Python";
 
   // Processing.NDI.structs
   py::enum_<NDIlib_frame_type_e>(m, "FrameType", py::arithmetic())
@@ -275,16 +275,30 @@ PYBIND11_MODULE(NDIlib, m) {
             self.p_extra_ips = strs[&self].c_str();
           });
 
-  m.def("find_create_v2", &NDIlib_find_create_v2,
-        py::arg("create_settings") = nullptr);
+  m.def(
+      "find_create_v2",
+      [](const NDIlib_find_create_t *p_create_settings) {
+        auto instance = NDIlib_find_create_v2(p_create_settings);
+        return py::capsule(instance);
+      },
+      py::arg("create_settings") = nullptr);
 
-  m.def("find_destroy", &NDIlib_find_destroy, py::arg("instance"));
+  m.def(
+      "find_destroy",
+      [](py::capsule p_instance) {
+        auto instance =
+            static_cast<NDIlib_find_instance_type *>(p_instance.get_pointer());
+        NDIlib_find_destroy(instance);
+      },
+      py::arg("instance"));
 
   m.def(
       "find_get_current_sources",
-      [](NDIlib_find_instance_t p_instance) {
+      [](py::capsule p_instance) {
+        auto instance =
+            static_cast<NDIlib_find_instance_type *>(p_instance.get_pointer());
         uint32_t count = 0;
-        auto sources = NDIlib_find_get_current_sources(p_instance, &count);
+        auto sources = NDIlib_find_get_current_sources(instance, &count);
         py::list out;
         for (uint32_t i = 0; i < count; ++i)
           out.append(sources + i);
@@ -292,8 +306,14 @@ PYBIND11_MODULE(NDIlib, m) {
       },
       py::arg("instance"));
 
-  m.def("find_wait_for_sources", &NDIlib_find_wait_for_sources,
-        py::arg("instance"), py::arg("timeout_in_ms"));
+  m.def(
+      "find_wait_for_sources",
+      [](py::capsule p_instance, uint32_t timeout_in_ms) {
+        auto instance =
+            static_cast<NDIlib_find_instance_type *>(p_instance.get_pointer());
+        return NDIlib_find_wait_for_sources(instance, timeout_in_ms);
+      },
+      py::arg("instance"), py::arg("timeout_in_ms"));
 
   // Processing.NDI.Recv
   py::enum_<NDIlib_recv_bandwidth_e>(m, "RecvBandwidth", py::arithmetic())
@@ -367,23 +387,42 @@ PYBIND11_MODULE(NDIlib, m) {
       .def_readwrite("audio_frames", &NDIlib_recv_queue_t::audio_frames)
       .def_readwrite("metadata_frames", &NDIlib_recv_queue_t::metadata_frames);
 
-  m.def("recv_create_v3", &NDIlib_recv_create_v3,
-        py::arg("instance") = nullptr);
+  m.def(
+      "recv_create_v3",
+      [](const NDIlib_recv_create_v3_t *p_create_settings) {
+        auto instance = NDIlib_recv_create_v3(p_create_settings);
+        return py::capsule(instance);
+      },
+      py::arg("create_settings") = nullptr);
 
-  m.def("recv_destroy", &NDIlib_recv_destroy, py::arg("instance"));
+  m.def(
+      "recv_destroy",
+      [](py::capsule p_instance) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        NDIlib_recv_destroy(instance);
+      },
+      py::arg("instance"));
 
-  m.def("recv_connect", &NDIlib_recv_connect, py::arg("instance"),
-        py::arg("source") = nullptr);
+  m.def(
+      "recv_connect",
+      [](py::capsule p_instance, const NDIlib_source_t *p_src) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        NDIlib_recv_connect(instance, p_src);
+      },
+      py::arg("instance"), py::arg("source") = nullptr);
 
   m.def(
       "recv_capture_v2",
-      [](NDIlib_recv_instance_t p_instance, uint32_t timeout_in_ms) {
+      [](py::capsule p_instance, uint32_t timeout_in_ms) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
         NDIlib_video_frame_v2_t video_frame;
         NDIlib_audio_frame_v2_t audio_frame;
         NDIlib_metadata_frame_t metadata_frame;
-        auto type =
-            NDIlib_recv_capture_v2(p_instance, &video_frame, &audio_frame,
-                                   &metadata_frame, timeout_in_ms);
+        auto type = NDIlib_recv_capture_v2(instance, &video_frame, &audio_frame,
+                                           &metadata_frame, timeout_in_ms);
         return std::tuple<NDIlib_frame_type_e, NDIlib_video_frame_v2_t,
                           NDIlib_audio_frame_v2_t, NDIlib_metadata_frame_t>(
             type, video_frame, audio_frame, metadata_frame);
@@ -392,131 +431,379 @@ PYBIND11_MODULE(NDIlib, m) {
 
   m.def(
       "recv_capture_v3",
-      [](NDIlib_recv_instance_t p_instance, uint32_t timeout_in_ms) {
+      [](py::capsule p_instance, uint32_t timeout_in_ms) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
         NDIlib_video_frame_v2_t video_frame;
         NDIlib_audio_frame_v3_t audio_frame;
         NDIlib_metadata_frame_t metadata_frame;
-        auto type =
-            NDIlib_recv_capture_v3(p_instance, &video_frame, &audio_frame,
-                                   &metadata_frame, timeout_in_ms);
+        auto type = NDIlib_recv_capture_v3(instance, &video_frame, &audio_frame,
+                                           &metadata_frame, timeout_in_ms);
         return std::tuple<NDIlib_frame_type_e, NDIlib_video_frame_v2_t,
                           NDIlib_audio_frame_v3_t, NDIlib_metadata_frame_t>(
             type, video_frame, audio_frame, metadata_frame);
       },
       py::arg("instance"), py::arg("timeout_in_ms"));
 
-  m.def("recv_free_video_v2", &NDIlib_recv_free_video_v2, py::arg("instance"),
-        py::arg("video_data"));
+  m.def(
+      "recv_free_video_v2",
+      [](py::capsule p_instance, const NDIlib_video_frame_v2_t *p_video_data) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        NDIlib_recv_free_video_v2(instance, p_video_data);
+      },
+      py::arg("instance"), py::arg("video_data") = nullptr);
 
-  m.def("recv_free_audio_v2", &NDIlib_recv_free_audio_v2, py::arg("instance"),
-        py::arg("audio_data"));
+  m.def(
+      "recv_free_audio_v2",
+      [](py::capsule p_instance, const NDIlib_audio_frame_v2_t *p_audio_data) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        NDIlib_recv_free_audio_v2(instance, p_audio_data);
+      },
+      py::arg("instance"), py::arg("audio_data") = nullptr);
 
-  m.def("recv_free_audio_v3", &NDIlib_recv_free_audio_v3, py::arg("instance"),
-        py::arg("audio_data"));
+  m.def(
+      "recv_free_audio_v3",
+      [](py::capsule p_instance, const NDIlib_audio_frame_v3_t *p_audio_data) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        NDIlib_recv_free_audio_v3(instance, p_audio_data);
+      },
+      py::arg("instance"), py::arg("audio_data") = nullptr);
 
-  m.def("recv_free_metadata", &NDIlib_recv_free_metadata, py::arg("instance"),
-        py::arg("metadata"));
+  m.def(
+      "recv_free_metadata",
+      [](py::capsule p_instance, const NDIlib_metadata_frame_t *p_metadata) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        NDIlib_recv_free_metadata(instance, p_metadata);
+      },
+      py::arg("instance"), py::arg("metadata") = nullptr);
 
-  m.def("recv_free_string", &NDIlib_recv_free_string, py::arg("instance"),
-        py::arg("string"));
+  m.def(
+      "recv_free_string",
+      [](py::capsule p_instance, const char *p_string) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        NDIlib_recv_free_string(instance, p_string);
+      },
+      py::arg("instance"), py::arg("string") = nullptr);
 
-  m.def("recv_send_metadata", &NDIlib_recv_send_metadata, py::arg("instance"),
-        py::arg("metadata_frame"));
+  m.def(
+      "recv_send_metadata",
+      [](py::capsule p_instance, const NDIlib_metadata_frame_t *p_metadata) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        return NDIlib_recv_send_metadata(instance, p_metadata);
+      },
+      py::arg("instance"), py::arg("metadata_frame"));
 
-  m.def("recv_set_tally", &NDIlib_recv_set_tally, py::arg("instance"),
-        py::arg("tally"));
+  m.def(
+      "recv_set_tally",
+      [](py::capsule p_instance, const NDIlib_tally_t *p_tally) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        return NDIlib_recv_set_tally(instance, p_tally);
+      },
+      py::arg("instance"), py::arg("tally"));
 
-  m.def("recv_get_performance", &NDIlib_recv_get_performance,
-        py::arg("instance"), py::arg("total"), py::arg("dropped"));
+  m.def(
+      "recv_get_performance",
+      [](py::capsule p_instance) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        NDIlib_recv_performance_t total;
+        NDIlib_recv_performance_t dropped;
+        NDIlib_recv_get_performance(instance, &total, &dropped);
+        return std::tuple<NDIlib_recv_performance_t, NDIlib_recv_performance_t>(
+            total, dropped);
+      },
+      py::arg("instance"));
 
-  m.def("recv_get_queue", &NDIlib_recv_get_queue, py::arg("instance"),
-        py::arg("total"));
+  m.def(
+      "recv_get_queue",
+      [](py::capsule p_instance) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        NDIlib_recv_queue_t total;
+        NDIlib_recv_get_queue(instance, &total);
+        return total;
+      },
+      py::arg("instance"));
 
-  m.def("recv_clear_connection_metadata",
-        &NDIlib_recv_clear_connection_metadata, py::arg("instance"));
+  m.def(
+      "recv_clear_connection_metadata",
+      [](py::capsule p_instance) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        NDIlib_recv_clear_connection_metadata(instance);
+      },
+      py::arg("instance"));
 
-  m.def("recv_add_connection_metadata", &NDIlib_recv_add_connection_metadata,
-        py::arg("instance"), py::arg("metadata"));
+  m.def(
+      "recv_add_connection_metadata",
+      [](py::capsule p_instance, const NDIlib_metadata_frame_t *p_metadata) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        NDIlib_recv_add_connection_metadata(instance, p_metadata);
+      },
+      py::arg("instance"), py::arg("metadata"));
 
-  m.def("recv_get_no_connections", &NDIlib_recv_get_no_connections,
-        py::arg("instance"));
+  m.def(
+      "recv_get_no_connections",
+      [](py::capsule p_instance) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        return NDIlib_recv_get_no_connections(instance);
+      },
+      py::arg("instance"));
 
-  m.def("recv_get_web_control", &NDIlib_recv_get_web_control,
-        py::arg("instance"));
+  m.def(
+      "recv_get_web_control",
+      [](py::capsule p_instance) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        auto str = NDIlib_recv_get_web_control(instance);
+        auto ustr = PyUnicode_DecodeLocale(str, nullptr);
+        return py::reinterpret_steal<py::str>(ustr);
+      },
+      py::arg("instance"));
 
   // Processing.NDI.Recv.ex
-  m.def("recv_ptz_is_supported", &NDIlib_recv_ptz_is_supported,
-        py::arg("instance"));
+  m.def(
+      "recv_ptz_is_supported",
+      [](py::capsule p_instance) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        return NDIlib_recv_ptz_is_supported(instance);
+      },
+      py::arg("instance"));
 
-  m.def("recv_recording_is_supported", &NDIlib_recv_recording_is_supported,
-        py::arg("instance"));
+  m.def(
+      "recv_recording_is_supported",
+      [](py::capsule p_instance) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        return NDIlib_recv_recording_is_supported(instance);
+      },
+      py::arg("instance"));
 
-  m.def("recv_ptz_zoom", &NDIlib_recv_ptz_zoom, py::arg("instance"),
-        py::arg("zoom_value"));
+  m.def(
+      "recv_ptz_zoom",
+      [](py::capsule p_instance, const float zoom_value) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        return NDIlib_recv_ptz_zoom(instance, zoom_value);
+      },
+      py::arg("instance"), py::arg("zoom_value"));
 
-  m.def("recv_ptz_zoom_speed", &NDIlib_recv_ptz_zoom_speed, py::arg("instance"),
-        py::arg("zoom_speed"));
+  m.def(
+      "recv_ptz_zoom_speed",
+      [](py::capsule p_instance, const float zoom_speed) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        return NDIlib_recv_ptz_zoom_speed(instance, zoom_speed);
+      },
+      py::arg("instance"), py::arg("zoom_speed"));
 
-  m.def("recv_ptz_pan_tilt", &NDIlib_recv_ptz_pan_tilt, py::arg("instance"),
-        py::arg("pan_value"), py::arg("tilt_value"));
+  m.def(
+      "recv_ptz_pan_tilt",
+      [](py::capsule p_instance, const float pan_value,
+         const float tilt_value) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        return NDIlib_recv_ptz_pan_tilt(instance, pan_value, tilt_value);
+      },
+      py::arg("instance"), py::arg("pan_value"), py::arg("tilt_value"));
 
-  m.def("recv_ptz_pan_tilt_speed", &NDIlib_recv_ptz_pan_tilt_speed,
-        py::arg("instance"), py::arg("pan_speed"), py::arg("tilt_speed"));
+  m.def(
+      "recv_ptz_pan_tilt_speed",
+      [](py::capsule p_instance, const float pan_speed,
+         const float tilt_speed) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        return NDIlib_recv_ptz_pan_tilt_speed(instance, pan_speed, tilt_speed);
+      },
+      py::arg("instance"), py::arg("pan_speed"), py::arg("tilt_speed"));
 
-  m.def("recv_ptz_store_preset", &NDIlib_recv_ptz_store_preset,
-        py::arg("instance"), py::arg("preset_no"));
+  m.def(
+      "recv_ptz_store_preset",
+      [](py::capsule p_instance, const int preset_no) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        return NDIlib_recv_ptz_store_preset(instance, preset_no);
+      },
+      py::arg("instance"), py::arg("preset_no"));
 
-  m.def("recv_ptz_recall_preset", &NDIlib_recv_ptz_recall_preset,
-        py::arg("instance"), py::arg("preset_no"), py::arg("speed"));
+  m.def(
+      "recv_ptz_recall_preset",
+      [](py::capsule p_instance, const int preset_no, const float speed) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        return NDIlib_recv_ptz_recall_preset(instance, preset_no, speed);
+      },
+      py::arg("instance"), py::arg("preset_no"), py::arg("speed"));
 
-  m.def("recv_ptz_auto_focus", &NDIlib_recv_ptz_auto_focus,
-        py::arg("instance"));
+  m.def(
+      "recv_ptz_auto_focus",
+      [](py::capsule p_instance) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        return NDIlib_recv_ptz_auto_focus(instance);
+      },
+      py::arg("instance"));
 
-  m.def("recv_ptz_focus", &NDIlib_recv_ptz_focus, py::arg("instance"),
-        py::arg("focus_value"));
+  m.def(
+      "recv_ptz_focus",
+      [](py::capsule p_instance, const float focus_value) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        return NDIlib_recv_ptz_focus(instance, focus_value);
+      },
+      py::arg("instance"), py::arg("focus_value"));
 
-  m.def("recv_ptz_focus_speed", &NDIlib_recv_ptz_focus_speed,
-        py::arg("instance"), py::arg("focus_speed"));
+  m.def(
+      "recv_ptz_focus_speed",
+      [](py::capsule p_instance, const float focus_speed) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        return NDIlib_recv_ptz_focus_speed(instance, focus_speed);
+      },
+      py::arg("instance"), py::arg("focus_speed"));
 
-  m.def("recv_ptz_white_balance_auto", &NDIlib_recv_ptz_white_balance_auto,
-        py::arg("instance"));
+  m.def(
+      "recv_ptz_white_balance_auto",
+      [](py::capsule p_instance) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        return NDIlib_recv_ptz_white_balance_auto(instance);
+      },
+      py::arg("instance"));
 
-  m.def("recv_ptz_white_balance_indoor", &NDIlib_recv_ptz_white_balance_indoor,
-        py::arg("instance"));
+  m.def(
+      "recv_ptz_white_balance_indoor",
+      [](py::capsule p_instance) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        return NDIlib_recv_ptz_white_balance_indoor(instance);
+      },
+      py::arg("instance"));
 
-  m.def("recv_ptz_white_balance_outdoor",
-        &NDIlib_recv_ptz_white_balance_outdoor, py::arg("instance"));
+  m.def(
+      "recv_ptz_white_balance_outdoor",
+      [](py::capsule p_instance) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        return NDIlib_recv_ptz_white_balance_outdoor(instance);
+      },
+      py::arg("instance"));
 
-  m.def("recv_ptz_white_balance_oneshot",
-        &NDIlib_recv_ptz_white_balance_oneshot, py::arg("instance"));
+  m.def(
+      "recv_ptz_white_balance_oneshot",
+      [](py::capsule p_instance) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        return NDIlib_recv_ptz_white_balance_oneshot(instance);
+      },
+      py::arg("instance"));
 
-  m.def("recv_ptz_white_balance_manual", &NDIlib_recv_ptz_white_balance_manual,
-        py::arg("instance"), py::arg("red"), py::arg("blue"));
+  m.def(
+      "recv_ptz_white_balance_manual",
+      [](py::capsule p_instance, const float red, const float blue) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        return NDIlib_recv_ptz_white_balance_manual(instance, red, blue);
+      },
+      py::arg("instance"), py::arg("red"), py::arg("blue"));
 
-  m.def("recv_ptz_exposure_auto", &NDIlib_recv_ptz_exposure_auto,
-        py::arg("instance"));
+  m.def(
+      "recv_ptz_exposure_auto",
+      [](py::capsule p_instance) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        return NDIlib_recv_ptz_exposure_auto(instance);
+      },
+      py::arg("instance"));
 
-  m.def("recv_ptz_exposure_manual", &NDIlib_recv_ptz_exposure_manual,
-        py::arg("instance"), py::arg("exposure_level"));
+  m.def(
+      "recv_ptz_exposure_manual",
+      [](py::capsule p_instance, const float exposure_level) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        return NDIlib_recv_ptz_exposure_manual(instance, exposure_level);
+      },
+      py::arg("instance"), py::arg("exposure_level"));
 
-  m.def("recv_recording_start", &NDIlib_recv_recording_start,
-        py::arg("instance"), py::arg("filename_hint"));
+  m.def(
+      "recv_ptz_exposure_manual_v2",
+      [](py::capsule p_instance, const float iris, const float gain,
+         const float shutter_speed) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        return NDIlib_recv_ptz_exposure_manual_v2(instance, iris, gain,
+                                                  shutter_speed);
+      },
+      py::arg("instance"), py::arg("iris"), py::arg("gain"),
+      py::arg("shutter_speed"));
 
-  m.def("recv_recording_stop", &NDIlib_recv_recording_stop,
-        py::arg("instance"));
+  m.def(
+      "recv_recording_start",
+      [](py::capsule p_instance, const char *p_filename_hint) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        return NDIlib_recv_recording_start(instance, p_filename_hint);
+      },
+      py::arg("instance"), py::arg("filename_hint"));
 
-  m.def("recv_recording_set_audio_level",
-        &NDIlib_recv_recording_set_audio_level, py::arg("instance"),
-        py::arg("level_dB"));
+  m.def(
+      "recv_recording_stop",
+      [](py::capsule p_instance) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        return NDIlib_recv_recording_stop(instance);
+      },
+      py::arg("instance"));
 
-  m.def("recv_recording_is_recording", &NDIlib_recv_recording_is_recording,
-        py::arg("instance"));
+  m.def(
+      "recv_recording_set_audio_level",
+      [](py::capsule p_instance, const float level_dB) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        return NDIlib_recv_recording_set_audio_level(instance, level_dB);
+      },
+      py::arg("instance"), py::arg("level_dB"));
 
-  m.def("recv_recording_get_filename", &NDIlib_recv_recording_get_filename,
-        py::arg("instance"));
+  m.def(
+      "recv_recording_is_recording",
+      [](py::capsule p_instance) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        return NDIlib_recv_recording_is_recording(instance);
+      },
+      py::arg("instance"));
 
-  m.def("recv_recording_get_error", &NDIlib_recv_recording_get_error,
-        py::arg("instance"));
+  m.def(
+      "recv_recording_get_filename",
+      [](py::capsule p_instance) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        auto str = NDIlib_recv_recording_get_filename(instance);
+        auto ustr = PyUnicode_DecodeLocale(str, nullptr);
+        return py::reinterpret_steal<py::str>(ustr);
+      },
+      py::arg("instance"));
+
+  m.def(
+      "recv_recording_get_error",
+      [](py::capsule p_instance) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        auto str = NDIlib_recv_recording_get_error(instance);
+        auto ustr = PyUnicode_DecodeLocale(str, nullptr);
+        return py::reinterpret_steal<py::str>(ustr);
+      },
+      py::arg("instance"));
 
   py::class_<NDIlib_recv_recording_time_t>(m, "RecvRecordingTime")
       .def(py::init<>())
@@ -524,8 +811,14 @@ PYBIND11_MODULE(NDIlib, m) {
       .def_readwrite("start_time", &NDIlib_recv_recording_time_t::start_time)
       .def_readwrite("last_time", &NDIlib_recv_recording_time_t::last_time);
 
-  m.def("recv_recording_get_times", &NDIlib_recv_recording_get_times,
-        py::arg("instance"), py::arg("times"));
+  m.def(
+      "recv_recording_get_times",
+      [](py::capsule p_instance, NDIlib_recv_recording_time_t *p_times) {
+        auto instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        return NDIlib_recv_recording_get_times(instance, p_times);
+      },
+      py::arg("instance"), py::arg("times"));
 
   // Processing.NDI.Send
   py::class_<NDIlib_send_create_t>(m, "SendCreate")
@@ -557,62 +850,155 @@ PYBIND11_MODULE(NDIlib, m) {
       .def_readwrite("clock_video", &NDIlib_send_create_t::clock_video)
       .def_readwrite("clock_audio", &NDIlib_send_create_t::clock_audio);
 
-  m.def("send_create", &NDIlib_send_create,
-        py::arg("create_settings") = nullptr);
+  m.def(
+      "send_create",
+      [](const NDIlib_send_create_t *p_create_settings) {
+        auto instance = NDIlib_send_create(p_create_settings);
+        return py::capsule(instance);
+      },
+      py::arg("create_settings") = nullptr);
 
-  m.def("send_destroy", &NDIlib_send_destroy, py::arg("instance"));
+  m.def(
+      "send_destroy",
+      [](py::capsule p_instance) {
+        auto instance =
+            static_cast<NDIlib_send_instance_type *>(p_instance.get_pointer());
+        NDIlib_send_destroy(instance);
+      },
+      py::arg("instance"));
 
-  m.def("send_send_video_v2", &NDIlib_send_send_video_v2, py::arg("instance"),
-        py::arg("video_data"));
+  m.def(
+      "send_send_video_v2",
+      [](py::capsule p_instance, const NDIlib_video_frame_v2_t *p_video_data) {
+        auto instance =
+            static_cast<NDIlib_send_instance_type *>(p_instance.get_pointer());
+        NDIlib_send_send_video_v2(instance, p_video_data);
+      },
+      py::arg("instance"), py::arg("video_data"));
 
-  m.def("send_send_video_async_v2", &NDIlib_send_send_video_async_v2,
-        py::arg("instance"), py::arg("video_data"));
+  m.def(
+      "send_send_video_async_v2",
+      [](py::capsule p_instance, const NDIlib_video_frame_v2_t *p_video_data) {
+        auto instance =
+            static_cast<NDIlib_send_instance_type *>(p_instance.get_pointer());
+        NDIlib_send_send_video_async_v2(instance, p_video_data);
+      },
+      py::arg("instance"), py::arg("video_data"));
 
-  m.def("send_send_audio_v2", &NDIlib_send_send_audio_v2, py::arg("instance"),
-        py::arg("audio_data"));
+  m.def(
+      "send_send_audio_v2",
+      [](py::capsule p_instance, const NDIlib_audio_frame_v2_t *p_audio_data) {
+        auto instance =
+            static_cast<NDIlib_send_instance_type *>(p_instance.get_pointer());
+        NDIlib_send_send_audio_v2(instance, p_audio_data);
+      },
+      py::arg("instance"), py::arg("audio_data"));
 
-  m.def("send_send_audio_v3", &NDIlib_send_send_audio_v3, py::arg("instance"),
-        py::arg("audio_data"));
+  m.def(
+      "send_send_audio_v3",
+      [](py::capsule p_instance, const NDIlib_audio_frame_v3_t *p_audio_data) {
+        auto instance =
+            static_cast<NDIlib_send_instance_type *>(p_instance.get_pointer());
+        NDIlib_send_send_audio_v3(instance, p_audio_data);
+      },
+      py::arg("instance"), py::arg("audio_data"));
 
-  m.def("send_send_metadata", &NDIlib_send_send_metadata, py::arg("instance"),
-        py::arg("metadata"));
+  m.def(
+      "send_send_metadata",
+      [](py::capsule p_instance, const NDIlib_metadata_frame_t *p_metadata) {
+        auto instance =
+            static_cast<NDIlib_send_instance_type *>(p_instance.get_pointer());
+        NDIlib_send_send_metadata(instance, p_metadata);
+      },
+      py::arg("instance"), py::arg("metadata"));
 
-  m.def("send_capture", &NDIlib_send_capture, py::arg("instance"),
-        py::arg("metadata"), py::arg("timeout_in_ms"));
+  m.def(
+      "send_capture",
+      [](py::capsule p_instance, NDIlib_metadata_frame_t *p_metadata,
+         uint32_t timeout_in_ms) {
+        auto instance =
+            static_cast<NDIlib_send_instance_type *>(p_instance.get_pointer());
+        NDIlib_send_capture(instance, p_metadata, timeout_in_ms);
+      },
+      py::arg("instance"), py::arg("metadata"), py::arg("timeout_in_ms"));
 
-  m.def("send_free_metadata", &NDIlib_send_free_metadata, py::arg("instance"),
-        py::arg("metadata"));
+  m.def(
+      "send_free_metadata",
+      [](py::capsule p_instance, const NDIlib_metadata_frame_t *p_metadata) {
+        auto instance =
+            static_cast<NDIlib_send_instance_type *>(p_instance.get_pointer());
+        NDIlib_send_free_metadata(instance, p_metadata);
+      },
+      py::arg("instance"), py::arg("metadata"));
 
-  m.def("send_get_tally", &NDIlib_send_get_tally, py::arg("instance"),
-        py::arg("tally"), py::arg("timeout_in_ms"));
+  m.def(
+      "send_get_tally",
+      [](py::capsule p_instance, NDIlib_tally_t *p_tally,
+         uint32_t timeout_in_ms) {
+        auto instance =
+            static_cast<NDIlib_send_instance_type *>(p_instance.get_pointer());
+        return NDIlib_send_get_tally(instance, p_tally, timeout_in_ms);
+      },
+      py::arg("instance"), py::arg("tally"), py::arg("timeout_in_ms"));
 
-  m.def("send_get_no_connections", &NDIlib_send_get_no_connections,
-        py::arg("instance"), py::arg("timeout_in_ms"));
+  m.def(
+      "send_get_no_connections",
+      [](py::capsule p_instance, uint32_t timeout_in_ms) {
+        auto instance =
+            static_cast<NDIlib_send_instance_type *>(p_instance.get_pointer());
+        return NDIlib_send_get_no_connections(instance, timeout_in_ms);
+      },
+      py::arg("instance"), py::arg("timeout_in_ms"));
 
-  m.def("send_clear_connection_metadata",
-        &NDIlib_send_clear_connection_metadata, py::arg("instance"));
+  m.def(
+      "send_clear_connection_metadata",
+      [](py::capsule p_instance) {
+        auto instance =
+            static_cast<NDIlib_send_instance_type *>(p_instance.get_pointer());
+        NDIlib_send_clear_connection_metadata(instance);
+      },
+      py::arg("instance"));
 
-  m.def("send_add_connection_metadata", &NDIlib_send_add_connection_metadata,
-        py::arg("instance"), py::arg("metadata"));
+  m.def(
+      "send_add_connection_metadata",
+      [](py::capsule p_instance, const NDIlib_metadata_frame_t *p_metadata) {
+        auto instance =
+            static_cast<NDIlib_send_instance_type *>(p_instance.get_pointer());
+        NDIlib_send_add_connection_metadata(instance, p_metadata);
+      },
+      py::arg("instance"), py::arg("metadata"));
 
-  m.def("send_set_failover", &NDIlib_send_set_failover, py::arg("instance"),
-        py::arg("failover_source"));
+  m.def(
+      "send_set_failover",
+      [](py::capsule p_instance, const NDIlib_source_t *p_failover_source) {
+        auto instance =
+            static_cast<NDIlib_send_instance_type *>(p_instance.get_pointer());
+        NDIlib_send_set_failover(instance, p_failover_source);
+      },
+      py::arg("instance"), py::arg("failover_source"));
 
-  m.def("send_get_source_name", &NDIlib_send_get_source_name,
-        py::arg("instance"));
+  m.def(
+      "send_get_source_name",
+      [](py::capsule p_instance) {
+        auto instance =
+            static_cast<NDIlib_send_instance_type *>(p_instance.get_pointer());
+        return NDIlib_send_get_source_name(instance);
+      },
+      py::arg("instance"));
 
   // Processing.NDI.Routing
   py::class_<NDIlib_routing_create_t>(m, "RoutingCreate")
       .def(py::init<const char *, const char *>(),
            py::arg("p_ndi_name") = nullptr, py::arg("p_groups") = nullptr)
-	  .def_property(
+      .def_property(
           "ndi_name",
           [](const NDIlib_routing_create_t &self) {
             auto ustr = PyUnicode_DecodeLocale(self.p_ndi_name, nullptr);
             return py::reinterpret_steal<py::str>(ustr);
           },
           [](NDIlib_routing_create_t &self, const char *name) {
-            static std::unordered_map<NDIlib_routing_create_t *, std::string> strs;
+            static std::unordered_map<NDIlib_routing_create_t *, std::string>
+                strs;
             strs[&self] = py::str(name);
             self.p_ndi_name = strs[&self].c_str();
           })
@@ -623,19 +1009,64 @@ PYBIND11_MODULE(NDIlib, m) {
             return py::reinterpret_steal<py::str>(ustr);
           },
           [](NDIlib_routing_create_t &self, const std::string &groups) {
-            static std::unordered_map<NDIlib_routing_create_t *, std::string> strs;
+            static std::unordered_map<NDIlib_routing_create_t *, std::string>
+                strs;
             strs[&self] = py::str(groups);
             self.p_groups = strs[&self].c_str();
           });
 
-  m.def("routing_create", &NDIlib_routing_create, py::arg("create_settings"));
+  m.def(
+      "routing_create",
+      [](const NDIlib_routing_create_t *p_create_settings) {
+        auto instance = NDIlib_routing_create(p_create_settings);
+        return py::capsule(instance);
+      },
+      py::arg("create_settings"));
 
-  m.def("routing_destroy", &NDIlib_routing_destroy, py::arg("instance"));
+  m.def(
+      "routing_destroy",
+      [](py::capsule p_instance) {
+        auto instance = static_cast<NDIlib_routing_instance_type *>(
+            p_instance.get_pointer());
+        NDIlib_routing_destroy(instance);
+      },
+      py::arg("instance"));
 
-  m.def("routing_change", &NDIlib_routing_change, py::arg("instance"),
-        py::arg("source"));
+  m.def(
+      "routing_change",
+      [](py::capsule p_instance, const NDIlib_source_t *p_source) {
+        auto instance = static_cast<NDIlib_routing_instance_type *>(
+            p_instance.get_pointer());
+        return NDIlib_routing_change(instance, p_source);
+      },
+      py::arg("instance"), py::arg("source"));
 
-  m.def("routing_clear", &NDIlib_routing_clear, py::arg("instance"));
+  m.def(
+      "routing_clear",
+      [](py::capsule p_instance) {
+        auto instance = static_cast<NDIlib_routing_instance_type *>(
+            p_instance.get_pointer());
+        NDIlib_routing_clear(instance);
+      },
+      py::arg("instance"));
+
+  m.def(
+      "routing_get_no_connections",
+      [](py::capsule p_instance, uint32_t timeout_in_ms) {
+        auto instance = static_cast<NDIlib_routing_instance_type *>(
+            p_instance.get_pointer());
+        return NDIlib_routing_get_no_connections(instance, timeout_in_ms);
+      },
+      py::arg("instance"), py::arg("timeout_in_ms"));
+
+  m.def(
+      "routing_get_source_name(",
+      [](py::capsule p_instance) {
+        auto instance = static_cast<NDIlib_routing_instance_type *>(
+            p_instance.get_pointer());
+        return NDIlib_routing_get_source_name(instance);
+      },
+      py::arg("instance"));
 
   // Processing.NDI.utilities
   py::class_<NDIlib_audio_frame_interleaved_16s_t>(m,
@@ -693,17 +1124,35 @@ PYBIND11_MODULE(NDIlib, m) {
                      &NDIlib_audio_frame_interleaved_32f_t::timecode)
       .def_readwrite("data", &NDIlib_audio_frame_interleaved_32f_t::p_data);
 
-  m.def("util_send_send_audio_interleaved_16s",
-        &NDIlib_util_send_send_audio_interleaved_16s, py::arg("instance"),
-        py::arg("audio_data"));
+  m.def(
+      "util_send_send_audio_interleaved_16s",
+      [](py::capsule p_instance,
+         const NDIlib_audio_frame_interleaved_16s_t *p_audio_data) {
+        auto instance =
+            static_cast<NDIlib_send_instance_type *>(p_instance.get_pointer());
+        NDIlib_util_send_send_audio_interleaved_16s(instance, p_audio_data);
+      },
+      py::arg("instance"), py::arg("audio_data"));
 
-  m.def("util_send_send_audio_interleaved_32s",
-        &NDIlib_util_send_send_audio_interleaved_32s, py::arg("instance"),
-        py::arg("audio_data"));
+  m.def(
+      "util_send_send_audio_interleaved_32s",
+      [](py::capsule p_instance,
+         const NDIlib_audio_frame_interleaved_32s_t *p_audio_data) {
+        auto instance =
+            static_cast<NDIlib_send_instance_type *>(p_instance.get_pointer());
+        NDIlib_util_send_send_audio_interleaved_32s(instance, p_audio_data);
+      },
+      py::arg("instance"), py::arg("audio_data"));
 
-  m.def("util_send_send_audio_interleaved_32f",
-        &NDIlib_util_send_send_audio_interleaved_32f, py::arg("instance"),
-        py::arg("audio_data"));
+  m.def(
+      "util_send_send_audio_interleaved_32f",
+      [](py::capsule p_instance,
+         const NDIlib_audio_frame_interleaved_32f_t *p_audio_data) {
+        auto instance =
+            static_cast<NDIlib_send_instance_type *>(p_instance.get_pointer());
+        NDIlib_util_send_send_audio_interleaved_32f(instance, p_audio_data);
+      },
+      py::arg("instance"), py::arg("audio_data"));
 
   m.def("util_audio_to_interleaved_16s_v2",
         &NDIlib_util_audio_to_interleaved_16s_v2, py::arg("src"),
@@ -739,31 +1188,93 @@ PYBIND11_MODULE(NDIlib, m) {
   // TODO
 
   // Processing.NDI.FrameSync
-  m.def("framesync_create", &NDIlib_framesync_create, py::arg("receiver"));
+  m.def(
+      "framesync_create",
+      [](py::capsule p_instance) {
+        auto recv_instance =
+            static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
+        auto instance = NDIlib_framesync_create(recv_instance);
+        return py::capsule(instance);
+      },
+      py::arg("receiver"));
 
-  m.def("framesync_destroy", &NDIlib_framesync_destroy, py::arg("instance"));
+  m.def(
+      "framesync_destroy",
+      [](py::capsule p_instance) {
+        auto instance = static_cast<NDIlib_framesync_instance_type *>(
+            p_instance.get_pointer());
+        NDIlib_framesync_destroy(instance);
+      },
+      py::arg("instance"));
 
-  m.def("framesync_capture_audio", &NDIlib_framesync_capture_audio,
-        py::arg("instance"), py::arg("audio_data"), py::arg("sample_rate"),
-        py::arg("no_channels"), py::arg("no_samples"));
+  m.def(
+      "framesync_capture_audio",
+      [](py::capsule p_instance, NDIlib_audio_frame_v2_t *p_audio_data,
+         int sample_rate, int no_channels, int no_samples) {
+        auto instance = static_cast<NDIlib_framesync_instance_type *>(
+            p_instance.get_pointer());
+        NDIlib_framesync_capture_audio(instance, p_audio_data, sample_rate,
+                                       no_channels, no_samples);
+      },
+      py::arg("instance"), py::arg("audio_data"), py::arg("sample_rate"),
+      py::arg("no_channels"), py::arg("no_samples"));
 
-  m.def("framesync_capture_audio_v2", &NDIlib_framesync_capture_audio_v2,
-        py::arg("instance"), py::arg("audio_data"), py::arg("sample_rate"),
-        py::arg("no_channels"), py::arg("no_samples"));
+  m.def(
+      "framesync_capture_audio_v2",
+      [](py::capsule p_instance, NDIlib_audio_frame_v3_t *p_audio_data,
+         int sample_rate, int no_channels, int no_samples) {
+        auto instance = static_cast<NDIlib_framesync_instance_type *>(
+            p_instance.get_pointer());
+        NDIlib_framesync_capture_audio_v2(instance, p_audio_data, sample_rate,
+                                          no_channels, no_samples);
+      },
+      py::arg("instance"), py::arg("audio_data"), py::arg("sample_rate"),
+      py::arg("no_channels"), py::arg("no_samples"));
 
-  m.def("framesync_free_audio", &NDIlib_framesync_free_audio,
-        py::arg("instance"), py::arg("audio_data"));
+  m.def(
+      "framesync_free_audio",
+      [](py::capsule p_instance, NDIlib_audio_frame_v2_t *p_audio_data) {
+        auto instance = static_cast<NDIlib_framesync_instance_type *>(
+            p_instance.get_pointer());
+        NDIlib_framesync_free_audio(instance, p_audio_data);
+      },
+      py::arg("instance"), py::arg("audio_data"));
 
-  m.def("framesync_free_audio_v2", &NDIlib_framesync_free_audio_v2,
-        py::arg("instance"), py::arg("audio_data"));
+  m.def(
+      "framesync_free_audio_v2",
+      [](py::capsule p_instance, NDIlib_audio_frame_v3_t *p_audio_data) {
+        auto instance = static_cast<NDIlib_framesync_instance_type *>(
+            p_instance.get_pointer());
+        NDIlib_framesync_free_audio_v2(instance, p_audio_data);
+      },
+      py::arg("instance"), py::arg("audio_data"));
 
-  m.def("framesync_audio_queue_depth", &NDIlib_framesync_audio_queue_depth,
-        py::arg("instance"));
+  m.def(
+      "framesync_audio_queue_depth",
+      [](py::capsule p_instance) {
+        auto instance = static_cast<NDIlib_framesync_instance_type *>(
+            p_instance.get_pointer());
+        return NDIlib_framesync_audio_queue_depth(instance);
+      },
+      py::arg("instance"));
 
-  m.def("framesync_capture_video", &NDIlib_framesync_capture_video,
-        py::arg("instance"), py::arg("video_data"),
-        py::arg("field_type") = NDIlib_frame_format_type_progressive);
+  m.def(
+      "framesync_capture_video",
+      [](py::capsule p_instance, NDIlib_video_frame_v2_t *p_video_data,
+         NDIlib_frame_format_type_e field_type) {
+        auto instance = static_cast<NDIlib_framesync_instance_type *>(
+            p_instance.get_pointer());
+        NDIlib_framesync_capture_video(instance, p_video_data, field_type);
+      },
+      py::arg("instance"), py::arg("video_data"),
+      py::arg("field_type") = NDIlib_frame_format_type_progressive);
 
-  m.def("framesync_free_video", &NDIlib_framesync_free_video,
-        py::arg("instance"), py::arg("video_data"));
+  m.def(
+      "framesync_free_video",
+      [](py::capsule p_instance, NDIlib_video_frame_v2_t *p_video_data) {
+        auto instance = static_cast<NDIlib_framesync_instance_type *>(
+            p_instance.get_pointer());
+        NDIlib_framesync_free_video(instance, p_video_data);
+      },
+      py::arg("instance"), py::arg("video_data"));
 }
