@@ -27,7 +27,7 @@ def main():
         sources = ndi.find_get_current_sources(ndi_find)
         if len(sources) > 0:
             new_source = random.choice(sources)
-            print('routing to %s \n' % new_source.ndi_name)
+            print('routing to %s' % new_source.ndi_name)
             ndi.routing_change(ndi_routing, new_source)
         else:
             ndi.routing_clear(ndi_routing)
