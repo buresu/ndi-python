@@ -33,7 +33,7 @@ class build_py(_build_py):
 
 setup(
     name="ndi-python",
-    version="4.6.2",
+    version="5.1.1",
     description="Wrapper package for NDI SDK python bindings.",
     author="Naoto Kondo <cgigcp3yqt@gmail.com>",
     license="MIT",
