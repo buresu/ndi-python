@@ -2,22 +2,27 @@
 NewTek NDI Python wrapper
 
 ## Setup
-### Windows, mac, ubuntu
+### Windows, Mac
 Donwload and install NDI SDK.  
 https://ndi.tv/sdk/
 
-### Arch Linux
+### Ubuntu
+Donwload and install NDI SDK.  
+https://ndi.tv/sdk/
 ```
-yay -S ndi-sdk
+sudo apt install avahi-daemon
+sudo systemctl enable --now avahi-daemon
 ```
 
-## Clone
+### Arch Linux
 ```
-git clone https://github.com/buresu/ndi-python.git --recursive
+yay -S avahi ndi-sdk
+sudo systemctl enable --now avahi-daemon
 ```
 
 ## Build
 ```
+git clone --recursive https://github.com/buresu/ndi-python.git
 cd /path/to/build
 cmake /path/to/project
 cmake --build /path/to/build --config Release
