@@ -1316,39 +1316,39 @@ PYBIND11_MODULE(NDIlib, m) {
 
   m.def(
       "framesync_free_audio_v2",
-      [](py::capsule p_instance, NDIlib_audio_frame_v3_t *p_audio_data) {
-        auto instance = static_cast<NDIlib_framesync_instance_type *>(
-            p_instance.get_pointer());
-        NDIlib_framesync_free_audio_v2(instance, p_audio_data);
+      [](py::capsule instance, NDIlib_audio_frame_v3_t *p_audio_data) {
+        auto p_instance = static_cast<NDIlib_framesync_instance_type *>(
+            instance.get_pointer());
+        NDIlib_framesync_free_audio_v2(p_instance, p_audio_data);
       },
       py::arg("instance"), py::arg("audio_data"));
 
   m.def(
       "framesync_audio_queue_depth",
-      [](py::capsule p_instance) {
-        auto instance = static_cast<NDIlib_framesync_instance_type *>(
-            p_instance.get_pointer());
-        return NDIlib_framesync_audio_queue_depth(instance);
+      [](py::capsule instance) {
+        auto p_instance = static_cast<NDIlib_framesync_instance_type *>(
+            instance.get_pointer());
+        return NDIlib_framesync_audio_queue_depth(p_instance);
       },
       py::arg("instance"));
 
   m.def(
       "framesync_capture_video",
-      [](py::capsule p_instance, NDIlib_video_frame_v2_t *p_video_data,
+      [](py::capsule instance, NDIlib_video_frame_v2_t *p_video_data,
          NDIlib_frame_format_type_e field_type) {
-        auto instance = static_cast<NDIlib_framesync_instance_type *>(
-            p_instance.get_pointer());
-        NDIlib_framesync_capture_video(instance, p_video_data, field_type);
+        auto p_instance = static_cast<NDIlib_framesync_instance_type *>(
+            instance.get_pointer());
+        NDIlib_framesync_capture_video(p_instance, p_video_data, field_type);
       },
       py::arg("instance"), py::arg("video_data"),
       py::arg("field_type") = NDIlib_frame_format_type_progressive);
 
   m.def(
       "framesync_free_video",
-      [](py::capsule p_instance, NDIlib_video_frame_v2_t *p_video_data) {
-        auto instance = static_cast<NDIlib_framesync_instance_type *>(
-            p_instance.get_pointer());
-        NDIlib_framesync_free_video(instance, p_video_data);
+      [](py::capsule instance, NDIlib_video_frame_v2_t *p_video_data) {
+        auto p_instance = static_cast<NDIlib_framesync_instance_type *>(
+            instance.get_pointer());
+        NDIlib_framesync_free_video(p_instance, p_video_data);
       },
       py::arg("instance"), py::arg("video_data"));
 }
