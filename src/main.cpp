@@ -279,7 +279,7 @@ PYBIND11_MODULE(NDIlib, m) {
       "find_create_v2",
       [](const NDIlib_find_create_t *p_create_settings) {
         auto instance = NDIlib_find_create_v2(p_create_settings);
-        return py::capsule(instance);
+        return py::capsule(instance, "FindInstance");
       },
       py::arg("create_settings") = nullptr);
 
@@ -391,7 +391,7 @@ PYBIND11_MODULE(NDIlib, m) {
       "recv_create_v3",
       [](const NDIlib_recv_create_v3_t *p_create_settings) {
         auto instance = NDIlib_recv_create_v3(p_create_settings);
-        return py::capsule(instance);
+        return py::capsule(instance, "RecvInstance");
       },
       py::arg("create_settings") = nullptr);
 
@@ -854,7 +854,7 @@ PYBIND11_MODULE(NDIlib, m) {
       "send_create",
       [](const NDIlib_send_create_t *p_create_settings) {
         auto instance = NDIlib_send_create(p_create_settings);
-        return py::capsule(instance);
+        return py::capsule(instance, "SendInstance");
       },
       py::arg("create_settings") = nullptr);
 
@@ -1019,7 +1019,7 @@ PYBIND11_MODULE(NDIlib, m) {
       "routing_create",
       [](const NDIlib_routing_create_t *p_create_settings) {
         auto instance = NDIlib_routing_create(p_create_settings);
-        return py::capsule(instance);
+        return py::capsule(instance, "RoutingInstance");
       },
       py::arg("create_settings"));
 
@@ -1194,7 +1194,7 @@ PYBIND11_MODULE(NDIlib, m) {
         auto recv_instance =
             static_cast<NDIlib_recv_instance_type *>(p_instance.get_pointer());
         auto instance = NDIlib_framesync_create(recv_instance);
-        return py::capsule(instance);
+        return py::capsule(instance, "FrameSyncInstance");
       },
       py::arg("receiver"));
 
