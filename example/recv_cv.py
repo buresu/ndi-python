@@ -3,6 +3,7 @@ import numpy as np
 import cv2 as cv
 import NDIlib as ndi
 
+
 def main():
 
     if not ndi.initialize():
@@ -34,12 +35,12 @@ def main():
     cv.startWindowThread()
 
     while True:
-        t,v,_,_ = ndi.recv_capture_v2(ndi_recv, 5000)
-        
+        t, v, _, _ = ndi.recv_capture_v2(ndi_recv, 5000)
+
         if t == ndi.FRAME_TYPE_VIDEO:
-            print("Video data received (%dx%d)." % (v.xres, v.yres))
+            print('Video data received (%dx%d).' % (v.xres, v.yres))
             frame = np.copy(v.data)
-            cv.imshow('ndi image',frame)
+            cv.imshow('ndi image', frame)
             ndi.recv_free_video_v2(ndi_recv, v)
 
         if cv.waitKey(1) & 0xff == 27:
@@ -50,6 +51,7 @@ def main():
     cv.destroyAllWindows()
 
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())
