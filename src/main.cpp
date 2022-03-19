@@ -117,7 +117,7 @@ PYBIND11_MODULE(NDIlib, m) {
           },
           [](NDIlib_video_frame_v2_t &self, const py::array_t<uint8_t> &array) {
             auto info = array.request();
-            self.p_data = reinterpret_cast<uint8_t *>(info.ptr);
+            self.p_data = static_cast<uint8_t *>(info.ptr);
             self.picture_aspect_ratio = info.shape[1] / float(info.shape[0]);
             self.xres = info.shape[1];
             self.yres = info.shape[0];
@@ -155,7 +155,7 @@ PYBIND11_MODULE(NDIlib, m) {
           "data", nullptr,
           [](NDIlib_audio_frame_v2_t &self, py::array_t<float *> &array) {
             auto info = array.request();
-            self.p_data = reinterpret_cast<float *>(info.ptr);
+            self.p_data = static_cast<float *>(info.ptr);
             self.channel_stride_in_bytes = info.strides[0];
           })
       .def_readwrite("channel_stride_in_bytes",
@@ -192,7 +192,7 @@ PYBIND11_MODULE(NDIlib, m) {
           "data", nullptr,
           [](NDIlib_audio_frame_v3_t &self, const py::array_t<uint8_t> &array) {
             auto info = array.request();
-            self.p_data = reinterpret_cast<uint8_t *>(info.ptr);
+            self.p_data = static_cast<uint8_t *>(info.ptr);
             self.channel_stride_in_bytes = info.strides[0];
           })
       .def_readwrite("channel_stride_in_bytes",
