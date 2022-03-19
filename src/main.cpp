@@ -152,10 +152,21 @@ PYBIND11_MODULE(NDIlib, m) {
       .def_readwrite("no_samples", &NDIlib_audio_frame_v2_t::no_samples)
       .def_readwrite("timecode", &NDIlib_audio_frame_v2_t::timecode)
       .def_property(
-          "data", nullptr,
-          [](NDIlib_audio_frame_v2_t &self, py::array_t<float *> &array) {
+          "data",
+          [](const NDIlib_audio_frame_v2_t &self) {
+            size_t col = self.no_samples;
+            size_t row = self.no_channels;
+            size_t size = sizeof(float);
+            auto buffer_info = py::buffer_info(
+                self.p_data, size, py::format_descriptor<float>::format(), row,
+                {row, col}, {col * size, size});
+            return py::array(buffer_info);
+          },
+          [](NDIlib_audio_frame_v2_t &self, py::array_t<float> &array) {
             auto info = array.request();
             self.p_data = static_cast<float *>(info.ptr);
+            self.no_channels = info.shape[0];
+            self.no_samples = info.shape[1];
             self.channel_stride_in_bytes = info.strides[0];
           })
       .def_readwrite("channel_stride_in_bytes",
@@ -189,10 +200,21 @@ PYBIND11_MODULE(NDIlib, m) {
       .def_readwrite("timecode", &NDIlib_audio_frame_v3_t::timecode)
       .def_readwrite("FourCC", &NDIlib_audio_frame_v3_t::FourCC)
       .def_property(
-          "data", nullptr,
-          [](NDIlib_audio_frame_v3_t &self, const py::array_t<uint8_t> &array) {
+          "data",
+          [](const NDIlib_audio_frame_v3_t &self) {
+            size_t col = self.no_samples;
+            size_t row = self.no_channels;
+            size_t size = sizeof(uint8_t);
+            auto buffer_info = py::buffer_info(
+                self.p_data, size, py::format_descriptor<uint8_t>::format(),
+                row, {row, col}, {col * size * 4, size});
+            return py::array(buffer_info);
+          },
+          [](NDIlib_audio_frame_v3_t &self, py::array_t<uint8_t> &array) {
             auto info = array.request();
             self.p_data = static_cast<uint8_t *>(info.ptr);
+            self.no_channels = info.shape[0];
+            self.no_samples = info.shape[1];
             self.channel_stride_in_bytes = info.strides[0];
           })
       .def_readwrite("channel_stride_in_bytes",
@@ -1087,7 +1109,24 @@ PYBIND11_MODULE(NDIlib, m) {
                      &NDIlib_audio_frame_interleaved_16s_t::timecode)
       .def_readwrite("reference_level",
                      &NDIlib_audio_frame_interleaved_16s_t::reference_level)
-      .def_readwrite("data", &NDIlib_audio_frame_interleaved_16s_t::p_data);
+      .def_property(
+          "data",
+          [](const NDIlib_audio_frame_interleaved_16s_t &self) {
+            size_t col = self.no_samples;
+            size_t row = self.no_channels;
+            size_t size = sizeof(int16_t);
+            auto buffer_info = py::buffer_info(
+                self.p_data, size, py::format_descriptor<int16_t>::format(),
+                row, {row, col}, {col * size, size});
+            return py::array(buffer_info);
+          },
+          [](NDIlib_audio_frame_interleaved_16s_t &self,
+             py::array_t<int16_t> &array) {
+            auto info = array.request();
+            self.p_data = static_cast<int16_t *>(info.ptr);
+            self.no_channels = info.shape[0];
+            self.no_samples = info.shape[1];
+          });
 
   py::class_<NDIlib_audio_frame_interleaved_32s_t>(m,
                                                    "AudioFrameInterleaved32s")
@@ -1106,7 +1145,24 @@ PYBIND11_MODULE(NDIlib, m) {
                      &NDIlib_audio_frame_interleaved_32s_t::timecode)
       .def_readwrite("reference_level",
                      &NDIlib_audio_frame_interleaved_32s_t::reference_level)
-      .def_readwrite("data", &NDIlib_audio_frame_interleaved_32s_t::p_data);
+      .def_property(
+          "data",
+          [](const NDIlib_audio_frame_interleaved_32s_t &self) {
+            size_t col = self.no_samples;
+            size_t row = self.no_channels;
+            size_t size = sizeof(int32_t);
+            auto buffer_info = py::buffer_info(
+                self.p_data, size, py::format_descriptor<int32_t>::format(),
+                row, {row, col}, {col * size, size});
+            return py::array(buffer_info);
+          },
+          [](NDIlib_audio_frame_interleaved_32s_t &self,
+             py::array_t<int32_t> &array) {
+            auto info = array.request();
+            self.p_data = static_cast<int32_t *>(info.ptr);
+            self.no_channels = info.shape[0];
+            self.no_samples = info.shape[1];
+          });
 
   py::class_<NDIlib_audio_frame_interleaved_32f_t>(m,
                                                    "AudioFrameInterleaved32f")
@@ -1123,7 +1179,24 @@ PYBIND11_MODULE(NDIlib, m) {
                      &NDIlib_audio_frame_interleaved_32f_t::no_samples)
       .def_readwrite("timecode",
                      &NDIlib_audio_frame_interleaved_32f_t::timecode)
-      .def_readwrite("data", &NDIlib_audio_frame_interleaved_32f_t::p_data);
+      .def_property(
+          "data",
+          [](const NDIlib_audio_frame_interleaved_32f_t &self) {
+            size_t col = self.no_samples;
+            size_t row = self.no_channels;
+            size_t size = sizeof(float);
+            auto buffer_info = py::buffer_info(
+                self.p_data, size, py::format_descriptor<float>::format(), row,
+                {row, col}, {col * size, size});
+            return py::array(buffer_info);
+          },
+          [](NDIlib_audio_frame_interleaved_32f_t &self,
+             py::array_t<float> &array) {
+            auto info = array.request();
+            self.p_data = static_cast<float *>(info.ptr);
+            self.no_channels = info.shape[0];
+            self.no_samples = info.shape[1];
+          });
 
   m.def(
       "util_send_send_audio_interleaved_16s",
