@@ -1283,27 +1283,31 @@ PYBIND11_MODULE(NDIlib, m) {
 
   m.def(
       "framesync_capture_audio",
-      [](py::capsule instance, NDIlib_audio_frame_v2_t *p_audio_data,
-         int sample_rate, int no_channels, int no_samples) {
+      [](py::capsule instance, int sample_rate, int no_channels,
+         int no_samples) {
         auto p_instance = static_cast<NDIlib_framesync_instance_type *>(
             instance.get_pointer());
-        NDIlib_framesync_capture_audio(p_instance, p_audio_data, sample_rate,
+        NDIlib_audio_frame_v2_t audio_frame;
+        NDIlib_framesync_capture_audio(p_instance, &audio_frame, sample_rate,
                                        no_channels, no_samples);
+        return audio_frame;
       },
-      py::arg("instance"), py::arg("audio_data"), py::arg("sample_rate"),
-      py::arg("no_channels"), py::arg("no_samples"));
+      py::arg("instance"), py::arg("sample_rate"), py::arg("no_channels"),
+      py::arg("no_samples"));
 
   m.def(
       "framesync_capture_audio_v2",
-      [](py::capsule instance, NDIlib_audio_frame_v3_t *p_audio_data,
-         int sample_rate, int no_channels, int no_samples) {
+      [](py::capsule instance, int sample_rate, int no_channels,
+         int no_samples) {
         auto p_instance = static_cast<NDIlib_framesync_instance_type *>(
             instance.get_pointer());
-        NDIlib_framesync_capture_audio_v2(p_instance, p_audio_data, sample_rate,
+        NDIlib_audio_frame_v3_t audio_frame;
+        NDIlib_framesync_capture_audio_v2(p_instance, &audio_frame, sample_rate,
                                           no_channels, no_samples);
+        return audio_frame;
       },
-      py::arg("instance"), py::arg("audio_data"), py::arg("sample_rate"),
-      py::arg("no_channels"), py::arg("no_samples"));
+      py::arg("instance"), py::arg("sample_rate"), py::arg("no_channels"),
+      py::arg("no_samples"));
 
   m.def(
       "framesync_free_audio",
@@ -1334,13 +1338,14 @@ PYBIND11_MODULE(NDIlib, m) {
 
   m.def(
       "framesync_capture_video",
-      [](py::capsule instance, NDIlib_video_frame_v2_t *p_video_data,
-         NDIlib_frame_format_type_e field_type) {
+      [](py::capsule instance, NDIlib_frame_format_type_e field_type) {
         auto p_instance = static_cast<NDIlib_framesync_instance_type *>(
             instance.get_pointer());
-        NDIlib_framesync_capture_video(p_instance, p_video_data, field_type);
+        NDIlib_video_frame_v2_t video_frame;
+        NDIlib_framesync_capture_video(p_instance, &video_frame, field_type);
+        return video_frame;
       },
-      py::arg("instance"), py::arg("video_data"),
+      py::arg("instance"),
       py::arg("field_type") = NDIlib_frame_format_type_progressive);
 
   m.def(
