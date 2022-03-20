@@ -2,6 +2,7 @@ import sys
 import time
 import NDIlib as ndi
 
+
 def main():
 
     if not ndi.initialize():
@@ -13,7 +14,7 @@ def main():
         return 0
 
     t = time.time()
-    while time.time() - t < 1.0:
+    while time.time() - t < 1.0 * 60:
         if not ndi.find_wait_for_sources(ndi_find, 5000):
             print('No change to the sources found.')
             continue
@@ -27,6 +28,7 @@ def main():
     ndi.destroy()
 
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())
