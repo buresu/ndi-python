@@ -56,7 +56,7 @@ setup(
     keywords=['NDI', 'NewTek', 'Video Production'],
     classifiers=[
         'Intended Audience :: Developers',
-        'License :: MIT License',
+        'License :: OSI Approved :: MIT License',
         'Operating System :: MacOS',
         'Operating System :: Microsoft :: Windows',
         'Operating System :: POSIX',
