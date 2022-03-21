@@ -47,12 +47,12 @@ if(WIN32)
     DESTINATION ${CMAKE_INSTALL_PREFIX}
   )
 elseif(APPLE)
-install(
-  FILES
-  "${NDI_LIBRARY_DIR}/libndi.dylib"
-  "${NDI_LICENSE_DIR}/libndi_licenses.txt"
-  DESTINATION ${CMAKE_INSTALL_PREFIX}
-)
+  install(
+    FILES
+    "${NDI_LIBRARY_DIR}/libndi.dylib"
+    "${NDI_LICENSE_DIR}/libndi_licenses.txt"
+    DESTINATION ${CMAKE_INSTALL_PREFIX}
+  )
 elseif(UNIX)
   file(GLOB DLL "${NDI_LIBRARY_DIR}/libndi.so*")
   install(
