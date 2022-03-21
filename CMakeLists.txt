@@ -51,11 +51,10 @@ install(
 )
 elseif(UNIX)
   file(GLOB DLL "${NDI_LIBRARY_DIR}/libndi.so*")
-  file(GLOB LICENSE "${NDI_LICENSE_DIR}/*.txt")
   install(
     FILES
     ${DLL}
-    ${LICENSE}
+    "${NDI_LICENSE_DIR}/libndi_licenses.txt"
     DESTINATION ${CMAKE_INSTALL_PREFIX}
   )
 endif()
