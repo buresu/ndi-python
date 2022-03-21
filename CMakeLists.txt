@@ -30,7 +30,6 @@ set_target_properties(NDIlib PROPERTIES INSTALL_RPATH_USE_LINK_PATH FALSE)
 set_target_properties(NDIlib PROPERTIES INSTALL_RPATH "$ORIGIN")
 
 # install
-set(CMAKE_INSTALL_PREFIX ${PROJECT_SOURCE_DIR})
 install(
   TARGETS NDIlib
   RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}
@@ -43,4 +42,13 @@ install(
   "${NDI_DIR}/Bin/x64/Processing.NDI.Lib.Licenses.txt"
   DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
+elseif(UNIX)
+  file(GLOB DLL "${NDI_LIBRARY_DIR}/libndi.so*")
+  file(GLOB LICENSE "${NDI_LICENSE_DIR}/*.txt")
+  install(
+    FILES
+    ${DLL}
+    ${LICENSE}
+    DESTINATION ${CMAKE_INSTALL_PREFIX}
+  )
 endif()
