@@ -52,5 +52,6 @@ setup(
     cmdclass={'build_ext': CMakeBuild},
     packages=['NDIlib'],
     package_data={'NDIlib': ['*.so*', '*.pyd', '*.dll', '*.dylib', '*.txt']},
-    zip_safe=False
+    zip_safe=False,
+    keywords=['NDI', 'NewTek', 'Video Production']
 )
