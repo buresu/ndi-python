@@ -27,20 +27,34 @@ set_target_properties(NDIlib PROPERTIES BUILD_RPATH_USE_ORIGIN TRUE)
 set_target_properties(NDIlib PROPERTIES SKIP_BUILD_RPATH FALSE)
 set_target_properties(NDIlib PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE)
 set_target_properties(NDIlib PROPERTIES INSTALL_RPATH_USE_LINK_PATH FALSE)
-set_target_properties(NDIlib PROPERTIES INSTALL_RPATH "$ORIGIN")
+set_target_properties(NDIlib PROPERTIES INSTALL_RPATH "@loader_path")
 
 # install
-set(CMAKE_INSTALL_PREFIX ${PROJECT_SOURCE_DIR})
 install(
   TARGETS NDIlib
   RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}
   LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
 if(WIN32)
+  install(
+    FILES
+    "${NDI_DIR}/Bin/x64/Processing.NDI.Lib.x64.dll"
+    "${NDI_DIR}/Bin/x64/Processing.NDI.Lib.Licenses.txt"
+    DESTINATION ${CMAKE_INSTALL_PREFIX}
+  )
+elseif(APPLE)
 install(
   FILES
-  "${NDI_DIR}/Bin/x64/Processing.NDI.Lib.x64.dll"
-  "${NDI_DIR}/Bin/x64/Processing.NDI.Lib.Licenses.txt"
+  "${NDI_LIBRARY_DIR}/libndi.dylib"
+  "${NDI_LICENSE_DIR}/libndi_licenses.txt"
   DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
+elseif(UNIX)
+  file(GLOB DLL "${NDI_LIBRARY_DIR}/libndi.so*")
+  install(
+    FILES
+    ${DLL}
+    "${NDI_LICENSE_DIR}/libndi_licenses.txt"
+    DESTINATION ${CMAKE_INSTALL_PREFIX}
+  )
 endif()
