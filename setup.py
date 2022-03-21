@@ -18,8 +18,13 @@ class CMakeBuild(build_ext):
         os.chdir(build_dir)
         install_dir = os.path.join(build_dir, 'install')
         if not self.dry_run:
-            self.spawn(
-                ['cmake', '..', '-DCMAKE_INSTALL_PREFIX=%s' % install_dir])
+            cmake_args = ['cmake', '..',
+                          '-DCMAKE_INSTALL_PREFIX=%s' % install_dir]
+            if "CMAKE_ARGS" in os.environ:
+                cmake_args += [
+                    item for item in os.environ["CMAKE_ARGS"].split(" ") if item]
+            print(cmake_args)
+            self.spawn(cmake_args)
             if self.debug:
                 self.spawn(['cmake', '--build', '.', '--config',
                            'Debug', '--target', 'install'])
