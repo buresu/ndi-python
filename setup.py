@@ -46,6 +46,7 @@ setup(
     author='Naoto Kondo <cgigcp3yqt@gmail.com>',
     url='https://github.com/buresu/ndi-python',
     license="MIT",
+    python_requires='>=3.6',
     ext_modules=[CMakeExtension('NDIlib')],
     cmdclass={'build_ext': CMakeBuild},
     packages=['NDIlib'],
