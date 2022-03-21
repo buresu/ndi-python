@@ -47,6 +47,7 @@ setup(
     url='https://github.com/buresu/ndi-python',
     license="MIT",
     python_requires='>=3.6',
+    install_requires=['numpy'],
     ext_modules=[CMakeExtension('NDIlib')],
     cmdclass={'build_ext': CMakeBuild},
     packages=['NDIlib'],
