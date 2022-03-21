@@ -27,7 +27,11 @@ set_target_properties(NDIlib PROPERTIES BUILD_RPATH_USE_ORIGIN TRUE)
 set_target_properties(NDIlib PROPERTIES SKIP_BUILD_RPATH FALSE)
 set_target_properties(NDIlib PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE)
 set_target_properties(NDIlib PROPERTIES INSTALL_RPATH_USE_LINK_PATH FALSE)
-set_target_properties(NDIlib PROPERTIES INSTALL_RPATH "@loader_path")
+if(APPLE)
+  set_target_properties(NDIlib PROPERTIES INSTALL_RPATH "@loader_path")
+elseif(UNIX)
+  set_target_properties(NDIlib PROPERTIES INSTALL_RPATH "$ORIGIN")
+endif()
 
 # install
 install(
