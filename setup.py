@@ -23,7 +23,6 @@ class CMakeBuild(build_ext):
             if "CMAKE_ARGS" in os.environ:
                 cmake_args += [
                     item for item in os.environ["CMAKE_ARGS"].split(" ") if item]
-            print(cmake_args)
             self.spawn(cmake_args)
             if self.debug:
                 self.spawn(['cmake', '--build', '.', '--config',
