@@ -42,6 +42,13 @@ if(WIN32)
     "${NDI_DIR}/Bin/x64/Processing.NDI.Lib.Licenses.txt"
     DESTINATION ${CMAKE_INSTALL_PREFIX}
   )
+elseif(APPLE)
+install(
+  FILES
+  "${NDI_LIBRARY_DIR}/libndi.dylib"
+  "${NDI_LICENSE_DIR}/libndi_licenses.txt"
+  DESTINATION ${CMAKE_INSTALL_PREFIX}
+)
 elseif(UNIX)
   file(GLOB DLL "${NDI_LIBRARY_DIR}/libndi.so*")
   file(GLOB LICENSE "${NDI_LICENSE_DIR}/*.txt")
