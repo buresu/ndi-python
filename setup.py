@@ -1,5 +1,6 @@
 import os
 import shutil
+from pathlib import Path
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
 
@@ -43,10 +44,17 @@ class CMakeBuild(build_ext):
                     shutil.copy(filepath, lib_dir)
 
 
+# read description
+this_directory = Path(__file__).parent
+long_description = (this_directory / "README.md").read_text()
+
+# setup
 setup(
     name='ndi-python',
     version='5.1.1.3',
     description='Wrapper package for NDI SDK python bindings.',
+    long_description=long_description,
+    long_description_content_type='text/markdown',
     author='Naoto Kondo <cgigcp3yqt@gmail.com>',
     url='https://github.com/buresu/ndi-python',
     license="MIT",
