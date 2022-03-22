@@ -45,7 +45,7 @@ class CMakeBuild(build_ext):
 
 setup(
     name='ndi-python',
-    version='5.1.1.2',
+    version='5.1.1.3',
     description='Wrapper package for NDI SDK python bindings.',
     author='Naoto Kondo <cgigcp3yqt@gmail.com>',
     url='https://github.com/buresu/ndi-python',
