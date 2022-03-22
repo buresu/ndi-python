@@ -42,8 +42,8 @@ install(
 if(WIN32)
   install(
     FILES
-    "${NDI_DIR}/Bin/x64/Processing.NDI.Lib.x64.dll"
-    "${NDI_DIR}/Bin/x64/Processing.NDI.Lib.Licenses.txt"
+    "${NDI_DIR}/Bin/${NDI_ARCH}/Processing.NDI.Lib.${NDI_ARCH}.dll"
+    "${NDI_LICENSE_DIR}/Processing.NDI.Lib.Licenses.txt"
     DESTINATION ${CMAKE_INSTALL_PREFIX}
   )
 elseif(APPLE)
