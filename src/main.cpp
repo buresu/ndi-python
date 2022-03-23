@@ -60,6 +60,8 @@ PYBIND11_MODULE(NDIlib, m) {
       .def_property(
           "ndi_name",
           [](const NDIlib_source_t &self) {
+            if (!self.p_ndi_name)
+              return py::str();
             auto ustr = PyUnicode_DecodeLocale(self.p_ndi_name, nullptr);
             return py::reinterpret_steal<py::str>(ustr);
           },
@@ -71,6 +73,8 @@ PYBIND11_MODULE(NDIlib, m) {
       .def_property(
           "url_address",
           [](const NDIlib_source_t &self) {
+            if (!self.p_url_address)
+              return py::str();
             auto ustr = PyUnicode_DecodeLocale(self.p_url_address, nullptr);
             return py::reinterpret_steal<py::str>(ustr);
           },
@@ -128,6 +132,8 @@ PYBIND11_MODULE(NDIlib, m) {
       .def_property(
           "metadata",
           [](const NDIlib_video_frame_v2_t &self) {
+            if (!self.p_metadata)
+              return py::str();
             auto ustr = PyUnicode_DecodeLocale(self.p_metadata, nullptr);
             return py::reinterpret_steal<py::str>(ustr);
           },
@@ -174,6 +180,8 @@ PYBIND11_MODULE(NDIlib, m) {
       .def_property(
           "metadata",
           [](const NDIlib_audio_frame_v2_t &self) {
+            if (!self.p_metadata)
+              return py::str();
             auto ustr = PyUnicode_DecodeLocale(self.p_metadata, nullptr);
             return py::reinterpret_steal<py::str>(ustr);
           },
@@ -222,6 +230,8 @@ PYBIND11_MODULE(NDIlib, m) {
       .def_property(
           "metadata",
           [](const NDIlib_audio_frame_v3_t &self) {
+            if (!self.p_metadata)
+              return py::str();
             auto ustr = PyUnicode_DecodeLocale(self.p_metadata, nullptr);
             return py::reinterpret_steal<py::str>(ustr);
           },
@@ -242,6 +252,8 @@ PYBIND11_MODULE(NDIlib, m) {
       .def_property(
           "data",
           [](const NDIlib_metadata_frame_t &self) {
+            if (!self.p_data)
+              return py::str();
             auto ustr = PyUnicode_DecodeLocale(self.p_data, nullptr);
             return py::reinterpret_steal<py::str>(ustr);
           },
@@ -277,6 +289,8 @@ PYBIND11_MODULE(NDIlib, m) {
       .def_property(
           "groups",
           [](const NDIlib_find_create_t &self) {
+            if (!self.p_groups)
+              return py::str();
             auto ustr = PyUnicode_DecodeLocale(self.p_groups, nullptr);
             return py::reinterpret_steal<py::str>(ustr);
           },
@@ -288,6 +302,8 @@ PYBIND11_MODULE(NDIlib, m) {
       .def_property(
           "extra_ips",
           [](const NDIlib_find_create_t &self) {
+            if (!self.p_extra_ips)
+              return py::str();
             auto ustr = PyUnicode_DecodeLocale(self.p_extra_ips, nullptr);
             return py::reinterpret_steal<py::str>(ustr);
           },
@@ -386,6 +402,8 @@ PYBIND11_MODULE(NDIlib, m) {
       .def_property(
           "ndi_recv_name",
           [](const NDIlib_recv_create_v3_t &self) {
+            if (!self.p_ndi_recv_name)
+              return py::str();
             auto ustr = PyUnicode_DecodeLocale(self.p_ndi_recv_name, nullptr);
             return py::reinterpret_steal<py::str>(ustr);
           },
@@ -851,6 +869,8 @@ PYBIND11_MODULE(NDIlib, m) {
       .def_property(
           "ndi_name",
           [](const NDIlib_send_create_t &self) {
+            if (!self.p_ndi_name)
+              return py::str();
             auto ustr = PyUnicode_DecodeLocale(self.p_ndi_name, nullptr);
             return py::reinterpret_steal<py::str>(ustr);
           },
@@ -862,6 +882,8 @@ PYBIND11_MODULE(NDIlib, m) {
       .def_property(
           "groups",
           [](const NDIlib_send_create_t &self) {
+            if (!self.p_groups)
+              return py::str();
             auto ustr = PyUnicode_DecodeLocale(self.p_groups, nullptr);
             return py::reinterpret_steal<py::str>(ustr);
           },
@@ -1016,6 +1038,8 @@ PYBIND11_MODULE(NDIlib, m) {
       .def_property(
           "ndi_name",
           [](const NDIlib_routing_create_t &self) {
+            if (!self.p_ndi_name)
+              return py::str();
             auto ustr = PyUnicode_DecodeLocale(self.p_ndi_name, nullptr);
             return py::reinterpret_steal<py::str>(ustr);
           },
@@ -1028,6 +1052,8 @@ PYBIND11_MODULE(NDIlib, m) {
       .def_property(
           "groups",
           [](const NDIlib_routing_create_t &self) {
+            if (!self.p_groups)
+              return py::str();
             auto ustr = PyUnicode_DecodeLocale(self.p_groups, nullptr);
             return py::reinterpret_steal<py::str>(ustr);
           },
