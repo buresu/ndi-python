@@ -66,11 +66,7 @@ env CMAKE_ARGS="-DNDI_SDK_DIR=/path/to/ndisdk" python setup.py build
 ```
 You can also specify the python version.  
 ```
-env CMAKE_ARGS="-DNDI_SDK_DIR=/path/to/ndisdk -DPYBIND11_PYTHON_VERSION=3.8" python3.8 setup.py build
-```
-or
-```
-env CMAKE_ARGS="-DNDI_SDK_DIR=/path/to/ndisdk -DPYTHON_EXECUTABLE=/path/to/python" /path/to/python setup.py build
+env CMAKE_ARGS="-DNDI_SDK_DIR=/path/to/ndisdk -DPYTHON_EXECUTABLE=/path/to/python3.8 -DPYBIND11_PYTHON_VERSION=3.8" /path/to/python3.8 setup.py build
 ```
 
 ### Build for Python package
