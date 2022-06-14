@@ -9,7 +9,7 @@ pip install ndi-python
 ```
 The supported environment is as follows.  
 - Windows x64 Python(3.7-3.10)
-- macOS x64 >=10.12 Python(3.7-3.10)
+- macOS x64(>=10.12),arm64(>=11.0) Python(3.7-3.10)
 - Linux x64,aarch64 Python(3.7-3.10)
 
 ## Setup Avahi
