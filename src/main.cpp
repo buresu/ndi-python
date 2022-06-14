@@ -164,7 +164,7 @@ PYBIND11_MODULE(NDIlib, m) {
             size_t row = self.no_channels;
             size_t size = sizeof(float);
             auto buffer_info = py::buffer_info(
-                self.p_data, size, py::format_descriptor<float>::format(), row,
+                self.p_data, size, py::format_descriptor<float>::format(), 2,
                 {row, col}, {col * size, size});
             return py::array(buffer_info);
           },
@@ -214,8 +214,8 @@ PYBIND11_MODULE(NDIlib, m) {
             size_t row = self.no_channels;
             size_t size = sizeof(uint8_t);
             auto buffer_info = py::buffer_info(
-                self.p_data, size, py::format_descriptor<uint8_t>::format(),
-                row, {row, col}, {col * size * 4, size});
+                self.p_data, size, py::format_descriptor<uint8_t>::format(), 2,
+                {row, col}, {col * size * 4, size});
             return py::array(buffer_info);
           },
           [](NDIlib_audio_frame_v3_t &self, py::array_t<uint8_t> &array) {
@@ -1142,8 +1142,8 @@ PYBIND11_MODULE(NDIlib, m) {
             size_t row = self.no_channels;
             size_t size = sizeof(int16_t);
             auto buffer_info = py::buffer_info(
-                self.p_data, size, py::format_descriptor<int16_t>::format(),
-                row, {row, col}, {col * size, size});
+                self.p_data, size, py::format_descriptor<int16_t>::format(), 2,
+                {row, col}, {col * size, size});
             return py::array(buffer_info);
           },
           [](NDIlib_audio_frame_interleaved_16s_t &self,
@@ -1178,8 +1178,8 @@ PYBIND11_MODULE(NDIlib, m) {
             size_t row = self.no_channels;
             size_t size = sizeof(int32_t);
             auto buffer_info = py::buffer_info(
-                self.p_data, size, py::format_descriptor<int32_t>::format(),
-                row, {row, col}, {col * size, size});
+                self.p_data, size, py::format_descriptor<int32_t>::format(), 2,
+                {row, col}, {col * size, size});
             return py::array(buffer_info);
           },
           [](NDIlib_audio_frame_interleaved_32s_t &self,
@@ -1212,7 +1212,7 @@ PYBIND11_MODULE(NDIlib, m) {
             size_t row = self.no_channels;
             size_t size = sizeof(float);
             auto buffer_info = py::buffer_info(
-                self.p_data, size, py::format_descriptor<float>::format(), row,
+                self.p_data, size, py::format_descriptor<float>::format(), 2,
                 {row, col}, {col * size, size});
             return py::array(buffer_info);
           },
