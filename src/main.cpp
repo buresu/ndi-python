@@ -298,37 +298,50 @@ PYBIND11_MODULE(NDIlib, m) {
   m.def("is_supported_CPU", &NDIlib_is_supported_CPU);
 
   // Processing.NDI.Find
+  static std::unordered_map<NDIlib_find_create_t *, std::string>
+      _find_create_groups;
+  static std::unordered_map<NDIlib_find_create_t *, std::string>
+      _find_create_extra_ips;
+
   py::class_<NDIlib_find_create_t>(m, "FindCreate")
-      .def(py::init<bool, const char *, const char *>(),
-           py::arg("show_local_sources") = true, py::arg("p_groups") = nullptr,
-           py::arg("p_extra_ips") = nullptr)
+      .def(py::init([](bool show_local_sources, const std::string &groups,
+                       const std::string &extra_ips) {
+             auto instance = new NDIlib_find_create_t();
+             _find_create_groups[instance] = py::str(groups);
+             _find_create_extra_ips[instance] = py::str(extra_ips);
+             instance->show_local_sources = show_local_sources;
+             instance->p_groups = groups.empty()
+                                      ? nullptr
+                                      : _find_create_groups[instance].c_str();
+             instance->p_extra_ips =
+                 extra_ips.empty() ? nullptr
+                                   : _find_create_extra_ips[instance].c_str();
+             return instance;
+           }),
+           py::arg("show_local_sources") = true, py::arg("groups") = "",
+           py::arg("extra_ips") = "")
       .def_readwrite("show_local_sources",
                      &NDIlib_find_create_t::show_local_sources)
       .def_property(
           "groups",
           [](const NDIlib_find_create_t &self) {
-            if (!self.p_groups)
-              return py::str();
-            auto ustr = PyUnicode_DecodeLocale(self.p_groups, nullptr);
-            return py::reinterpret_steal<py::str>(ustr);
+            return self.p_groups ? std::string(self.p_groups) : "";
           },
           [](NDIlib_find_create_t &self, const std::string &groups) {
-            static std::unordered_map<NDIlib_find_create_t *, std::string> strs;
-            strs[&self] = py::str(groups);
-            self.p_groups = strs[&self].c_str();
+            _find_create_groups[&self] = py::str(groups);
+            self.p_groups =
+                groups.empty() ? nullptr : _find_create_groups[&self].c_str();
           })
       .def_property(
           "extra_ips",
           [](const NDIlib_find_create_t &self) {
-            if (!self.p_extra_ips)
-              return py::str();
-            auto ustr = PyUnicode_DecodeLocale(self.p_extra_ips, nullptr);
-            return py::reinterpret_steal<py::str>(ustr);
+            return self.p_extra_ips ? std::string(self.p_extra_ips) : "";
           },
           [](NDIlib_find_create_t &self, const std::string &extra_ips) {
-            static std::unordered_map<NDIlib_find_create_t *, std::string> strs;
-            strs[&self] = py::str(extra_ips);
-            self.p_extra_ips = strs[&self].c_str();
+            _find_create_extra_ips[&self] = py::str(extra_ips);
+            self.p_extra_ips = extra_ips.empty()
+                                   ? nullptr
+                                   : _find_create_extra_ips[&self].c_str();
           });
 
   m.def(
