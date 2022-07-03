@@ -54,34 +54,45 @@ PYBIND11_MODULE(NDIlib, m) {
 
   m.attr("RECV_TIMESTAMP_UNDEFINED") = py::int_(INT64_MAX);
 
+  static std::unordered_map<NDIlib_source_t *, std::string> _source_ndi_names;
+  static std::unordered_map<NDIlib_source_t *, std::string>
+      _source_url_addresses;
+
   py::class_<NDIlib_source_t>(m, "Source")
-      .def(py::init<const char *, const char *>(),
-           py::arg("p_ndi_name") = nullptr, py::arg("p_url_address") = nullptr)
+      .def(py::init([](const std::string &ndi_name,
+                       const std::string &url_address) {
+             auto instance = new NDIlib_source_t();
+             _source_ndi_names[instance] = py::str(ndi_name);
+             _source_url_addresses[instance] = py::str(url_address);
+             instance->p_ndi_name = ndi_name.empty()
+                                        ? nullptr
+                                        : _source_ndi_names[instance].c_str();
+             instance->p_url_address =
+                 url_address.empty() ? nullptr
+                                     : _source_url_addresses[instance].c_str();
+             return instance;
+           }),
+           py::arg("ndi_name") = "", py::arg("url_address") = "")
       .def_property(
           "ndi_name",
           [](const NDIlib_source_t &self) {
-            if (!self.p_ndi_name)
-              return py::str();
-            auto ustr = PyUnicode_DecodeLocale(self.p_ndi_name, nullptr);
-            return py::reinterpret_steal<py::str>(ustr);
+            return self.p_ndi_name ? std::string(self.p_ndi_name) : "";
           },
           [](NDIlib_source_t &self, const std::string &name) {
-            static std::unordered_map<NDIlib_source_t *, std::string> strs;
-            strs[&self] = py::str(name);
-            self.p_ndi_name = strs[&self].c_str();
+            _source_ndi_names[&self] = py::str(name);
+            self.p_ndi_name =
+                name.empty() ? nullptr : _source_ndi_names[&self].c_str();
           })
       .def_property(
           "url_address",
           [](const NDIlib_source_t &self) {
-            if (!self.p_url_address)
-              return py::str();
-            auto ustr = PyUnicode_DecodeLocale(self.p_url_address, nullptr);
-            return py::reinterpret_steal<py::str>(ustr);
+            return self.p_url_address ? std::string(self.p_url_address) : "";
           },
           [](NDIlib_source_t &self, const std::string &address) {
-            static std::unordered_map<NDIlib_source_t *, std::string> strs;
-            strs[&self] = py::str(address);
-            self.p_url_address = strs[&self].c_str();
+            _source_url_addresses[&self] = py::str(address);
+            self.p_url_address = address.empty()
+                                     ? nullptr
+                                     : _source_url_addresses[&self].c_str();
           });
 
   py::class_<NDIlib_video_frame_v2_t>(m, "VideoFrameV2")
