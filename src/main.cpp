@@ -254,25 +254,32 @@ PYBIND11_MODULE(NDIlib, m) {
           })
       .def_readwrite("timestamp", &NDIlib_audio_frame_v3_t::timestamp);
 
+  static std::unordered_map<NDIlib_metadata_frame_t *, std::string>
+      _metadata_frame_data;
+
   py::class_<NDIlib_metadata_frame_t>(m, "MetadataFrame")
-      .def(py::init<int, int64_t, char *>(), py::arg("length") = 0,
+      .def(py::init([](int64_t timecode, const std::string &data) {
+             auto instance = new NDIlib_metadata_frame_t();
+             _metadata_frame_data[instance] = py::str(data);
+             instance->timecode = timecode;
+             instance->length = _metadata_frame_data[instance].size();
+             instance->p_data =
+                 data.empty() ? nullptr : &_metadata_frame_data[instance][0];
+             return instance;
+           }),
            py::arg("timecode") = NDIlib_send_timecode_synthesize,
-           py::arg("p_data") = nullptr)
-      .def_readwrite("length", &NDIlib_metadata_frame_t::length)
+           py::arg("data") = "")
       .def_readwrite("timecode", &NDIlib_metadata_frame_t::timecode)
       .def_property(
           "data",
           [](const NDIlib_metadata_frame_t &self) {
-            if (!self.p_data)
-              return py::str();
-            auto ustr = PyUnicode_DecodeLocale(self.p_data, nullptr);
-            return py::reinterpret_steal<py::str>(ustr);
+            return self.p_data ? std::string(self.p_data) : "";
           },
           [](NDIlib_metadata_frame_t &self, const std::string &data) {
-            static std::unordered_map<NDIlib_metadata_frame_t *, std::string>
-                strs;
-            strs[&self] = py::str(data);
-            self.p_data = &strs[&self][0];
+            _metadata_frame_data[&self] = py::str(data);
+            self.length = _metadata_frame_data[&self].size();
+            self.p_data =
+                data.empty() ? nullptr : &_metadata_frame_data[&self][0];
           });
 
   py::class_<NDIlib_tally_t>(m, "Tally")
