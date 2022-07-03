@@ -1092,36 +1092,46 @@ PYBIND11_MODULE(NDIlib, m) {
       py::arg("instance"));
 
   // Processing.NDI.Routing
+  static std::unordered_map<NDIlib_routing_create_t *, std::string>
+      _routing_create_ndi_names;
+  static std::unordered_map<NDIlib_routing_create_t *, std::string>
+      _routing_create_groups;
+
   py::class_<NDIlib_routing_create_t>(m, "RoutingCreate")
-      .def(py::init<const char *, const char *>(),
-           py::arg("p_ndi_name") = nullptr, py::arg("p_groups") = nullptr)
+      .def(py::init([](const std::string &ndi_name, const std::string &groups) {
+             auto instance = new NDIlib_routing_create_t();
+             _routing_create_ndi_names[instance] = py::str(ndi_name);
+             _routing_create_groups[instance] = py::str(groups);
+             instance->p_ndi_name =
+                 ndi_name.empty() ? nullptr
+                                  : _routing_create_ndi_names[instance].c_str();
+             instance->p_groups =
+                 groups.empty() ? nullptr
+                                : _routing_create_groups[instance].c_str();
+             return instance;
+           }),
+           py::arg("ndi_name") = "", py::arg("groups") = "")
       .def_property(
           "ndi_name",
           [](const NDIlib_routing_create_t &self) {
-            if (!self.p_ndi_name)
-              return py::str();
-            auto ustr = PyUnicode_DecodeLocale(self.p_ndi_name, nullptr);
-            return py::reinterpret_steal<py::str>(ustr);
+            return self.p_ndi_name ? std::string(self.p_ndi_name) : "";
           },
-          [](NDIlib_routing_create_t &self, const char *name) {
-            static std::unordered_map<NDIlib_routing_create_t *, std::string>
-                strs;
-            strs[&self] = py::str(name);
-            self.p_ndi_name = strs[&self].c_str();
+          [](NDIlib_routing_create_t &self, const std::string &name) {
+            _routing_create_ndi_names[&self] = py::str(name);
+            self.p_ndi_name = name.empty()
+                                  ? nullptr
+                                  : _routing_create_ndi_names[&self].c_str();
           })
       .def_property(
           "groups",
           [](const NDIlib_routing_create_t &self) {
-            if (!self.p_groups)
-              return py::str();
-            auto ustr = PyUnicode_DecodeLocale(self.p_groups, nullptr);
-            return py::reinterpret_steal<py::str>(ustr);
+            return self.p_groups ? std::string(self.p_groups) : "";
           },
           [](NDIlib_routing_create_t &self, const std::string &groups) {
-            static std::unordered_map<NDIlib_routing_create_t *, std::string>
-                strs;
-            strs[&self] = py::str(groups);
-            self.p_groups = strs[&self].c_str();
+            _routing_create_groups[&self] = py::str(groups);
+            self.p_groups = groups.empty()
+                                ? nullptr
+                                : _routing_create_groups[&self].c_str();
           });
 
   m.def(
