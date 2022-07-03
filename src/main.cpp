@@ -416,14 +416,31 @@ PYBIND11_MODULE(NDIlib, m) {
       .value("RECV_COLOR_FORMAT_MAX", NDIlib_recv_color_format_max)
       .export_values();
 
+  static std::unordered_map<NDIlib_recv_create_v3_t *, std::string>
+      _recv_create_ndi_recv_name;
+
   py::class_<NDIlib_recv_create_v3_t>(m, "RecvCreateV3")
-      .def(py::init<const NDIlib_source_t, NDIlib_recv_color_format_e,
-                    NDIlib_recv_bandwidth_e, bool, const char *>(),
+      .def(py::init([](const NDIlib_source_t source_to_connect_to,
+                       NDIlib_recv_color_format_e color_format,
+                       NDIlib_recv_bandwidth_e bandwidth,
+                       bool allow_video_fields,
+                       const std::string &ndi_recv_name) {
+             auto instance = new NDIlib_recv_create_v3_t();
+             _recv_create_ndi_recv_name[instance] = py::str(ndi_recv_name);
+             instance->source_to_connect_to = source_to_connect_to;
+             instance->color_format = color_format;
+             instance->bandwidth = bandwidth;
+             instance->allow_video_fields = allow_video_fields;
+             instance->p_ndi_recv_name =
+                 ndi_recv_name.empty()
+                     ? nullptr
+                     : _recv_create_ndi_recv_name[instance].c_str();
+             return instance;
+           }),
            py::arg("source_to_connect_to") = NDIlib_source_t(),
            py::arg("color_format") = NDIlib_recv_color_format_UYVY_BGRA,
            py::arg("bandwidth") = NDIlib_recv_bandwidth_highest,
-           py::arg("allow_video_fields") = true,
-           py::arg("p_ndi_recv_name") = nullptr)
+           py::arg("allow_video_fields") = true, py::arg("ndi_recv_name") = "")
       .def_readwrite("source_to_connect_to",
                      &NDIlib_recv_create_v3_t::source_to_connect_to)
       .def_readwrite("color_format", &NDIlib_recv_create_v3_t::color_format)
@@ -433,16 +450,15 @@ PYBIND11_MODULE(NDIlib, m) {
       .def_property(
           "ndi_recv_name",
           [](const NDIlib_recv_create_v3_t &self) {
-            if (!self.p_ndi_recv_name)
-              return py::str();
-            auto ustr = PyUnicode_DecodeLocale(self.p_ndi_recv_name, nullptr);
-            return py::reinterpret_steal<py::str>(ustr);
+            return self.p_ndi_recv_name ? std::string(self.p_ndi_recv_name)
+                                        : "";
           },
           [](NDIlib_recv_create_v3_t &self, const std::string &ndi_recv_name) {
-            static std::unordered_map<NDIlib_recv_create_v3_t *, std::string>
-                strs;
-            strs[&self] = py::str(ndi_recv_name);
-            self.p_ndi_recv_name = strs[&self].c_str();
+            _recv_create_ndi_recv_name[&self] = py::str(ndi_recv_name);
+            self.p_ndi_recv_name =
+                ndi_recv_name.empty()
+                    ? nullptr
+                    : _recv_create_ndi_recv_name[&self].c_str();
           });
 
   py::class_<NDIlib_recv_performance_t>(m, "RecvPerformance")
