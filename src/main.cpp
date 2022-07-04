@@ -681,8 +681,7 @@ PYBIND11_MODULE(NDIlib, m) {
         auto p_instance =
             static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
         auto str = NDIlib_recv_get_web_control(p_instance);
-        auto ustr = PyUnicode_DecodeLocale(str, nullptr);
-        return py::reinterpret_steal<py::str>(ustr);
+        return str ? std::string(str) : "";
       },
       py::arg("instance"));
 
@@ -904,8 +903,7 @@ PYBIND11_MODULE(NDIlib, m) {
         auto p_instance =
             static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
         auto str = NDIlib_recv_recording_get_filename(p_instance);
-        auto ustr = PyUnicode_DecodeLocale(str, nullptr);
-        return py::reinterpret_steal<py::str>(ustr);
+        return str ? std::string(str) : "";
       },
       py::arg("instance"));
 
@@ -915,8 +913,7 @@ PYBIND11_MODULE(NDIlib, m) {
         auto p_instance =
             static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
         auto str = NDIlib_recv_recording_get_error(p_instance);
-        auto ustr = PyUnicode_DecodeLocale(str, nullptr);
-        return py::reinterpret_steal<py::str>(ustr);
+        return str ? std::string(str) : "";
       },
       py::arg("instance"));
 
