@@ -281,33 +281,38 @@ PYBIND11_MODULE(NDIlib, m) {
           })
       .def_readwrite("timestamp", &NDIlib_audio_frame_v3_t::timestamp);
 
-  static std::unordered_map<NDIlib_metadata_frame_t *, std::string>
-      _metadata_frame_data;
+  class PyNDIlib_metadata_frame_t : public NDIlib_metadata_frame_t {
+  public:
+    PyNDIlib_metadata_frame_t(
+        int64_t timecode = NDIlib_send_timecode_synthesize,
+        const std::string &data = "")
+        : NDIlib_metadata_frame_t() {
+      this->timecode = timecode;
+      set_data(data);
+    }
+    ~PyNDIlib_metadata_frame_t() = default;
 
-  py::class_<NDIlib_metadata_frame_t>(m, "MetadataFrame")
-      .def(py::init([](int64_t timecode, const std::string &data) {
-             auto instance = new NDIlib_metadata_frame_t();
-             _metadata_frame_data[instance] = py::str(data);
-             instance->timecode = timecode;
-             instance->length = _metadata_frame_data[instance].size();
-             instance->p_data =
-                 data.empty() ? nullptr : &_metadata_frame_data[instance][0];
-             return instance;
-           }),
+    std::string data() const {
+      return this->p_data ? std::string(this->p_data) : "";
+    }
+
+    void set_data(const std::string &data) {
+      _data = py::str(data);
+      this->length = _data.size();
+      this->p_data = _data.empty() ? nullptr : &_data[0];
+    }
+
+  private:
+    std::string _data;
+  };
+
+  py::class_<PyNDIlib_metadata_frame_t>(m, "MetadataFrame")
+      .def(py::init<int64_t, const std::string &>(),
            py::arg("timecode") = NDIlib_send_timecode_synthesize,
            py::arg("data") = "")
-      .def_readwrite("timecode", &NDIlib_metadata_frame_t::timecode)
-      .def_property(
-          "data",
-          [](const NDIlib_metadata_frame_t &self) {
-            return self.p_data ? std::string(self.p_data) : "";
-          },
-          [](NDIlib_metadata_frame_t &self, const std::string &data) {
-            _metadata_frame_data[&self] = py::str(data);
-            self.length = _metadata_frame_data[&self].size();
-            self.p_data =
-                data.empty() ? nullptr : &_metadata_frame_data[&self][0];
-          });
+      .def_readwrite("timecode", &PyNDIlib_metadata_frame_t::timecode)
+      .def_property("data", &PyNDIlib_metadata_frame_t::data,
+                    &PyNDIlib_metadata_frame_t::set_data);
 
   py::class_<NDIlib_tally_t>(m, "Tally")
       .def(py::init<bool, bool>(), py::arg("on_program") = false,
@@ -534,12 +539,14 @@ PYBIND11_MODULE(NDIlib, m) {
             static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
         NDIlib_video_frame_v2_t video_frame;
         NDIlib_audio_frame_v2_t audio_frame;
-        NDIlib_metadata_frame_t metadata_frame;
+        PyNDIlib_metadata_frame_t metadata_frame;
+        auto p_metadata_frame =
+            static_cast<NDIlib_metadata_frame_t *>(&metadata_frame);
         auto type =
             NDIlib_recv_capture_v2(p_instance, &video_frame, &audio_frame,
-                                   &metadata_frame, timeout_in_ms);
+                                   p_metadata_frame, timeout_in_ms);
         return std::tuple<NDIlib_frame_type_e, NDIlib_video_frame_v2_t,
-                          NDIlib_audio_frame_v2_t, NDIlib_metadata_frame_t>(
+                          NDIlib_audio_frame_v2_t, PyNDIlib_metadata_frame_t>(
             type, video_frame, audio_frame, metadata_frame);
       },
       py::arg("instance"), py::arg("timeout_in_ms"));
@@ -551,12 +558,14 @@ PYBIND11_MODULE(NDIlib, m) {
             static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
         NDIlib_video_frame_v2_t video_frame;
         NDIlib_audio_frame_v3_t audio_frame;
-        NDIlib_metadata_frame_t metadata_frame;
+        PyNDIlib_metadata_frame_t metadata_frame;
+        auto p_metadata_frame =
+            static_cast<NDIlib_metadata_frame_t *>(&metadata_frame);
         auto type =
             NDIlib_recv_capture_v3(p_instance, &video_frame, &audio_frame,
-                                   &metadata_frame, timeout_in_ms);
+                                   p_metadata_frame, timeout_in_ms);
         return std::tuple<NDIlib_frame_type_e, NDIlib_video_frame_v2_t,
-                          NDIlib_audio_frame_v3_t, NDIlib_metadata_frame_t>(
+                          NDIlib_audio_frame_v3_t, PyNDIlib_metadata_frame_t>(
             type, video_frame, audio_frame, metadata_frame);
       },
       py::arg("instance"), py::arg("timeout_in_ms"));
@@ -590,7 +599,7 @@ PYBIND11_MODULE(NDIlib, m) {
 
   m.def(
       "recv_free_metadata",
-      [](py::capsule instance, const NDIlib_metadata_frame_t *p_metadata) {
+      [](py::capsule instance, const PyNDIlib_metadata_frame_t *p_metadata) {
         auto p_instance =
             static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
         NDIlib_recv_free_metadata(p_instance, p_metadata);
@@ -608,7 +617,7 @@ PYBIND11_MODULE(NDIlib, m) {
 
   m.def(
       "recv_send_metadata",
-      [](py::capsule instance, const NDIlib_metadata_frame_t *p_metadata) {
+      [](py::capsule instance, const PyNDIlib_metadata_frame_t *p_metadata) {
         auto p_instance =
             static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
         return NDIlib_recv_send_metadata(p_instance, p_metadata);
@@ -659,7 +668,7 @@ PYBIND11_MODULE(NDIlib, m) {
 
   m.def(
       "recv_add_connection_metadata",
-      [](py::capsule instance, const NDIlib_metadata_frame_t *p_metadata) {
+      [](py::capsule instance, const PyNDIlib_metadata_frame_t *p_metadata) {
         auto p_instance =
             static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
         NDIlib_recv_add_connection_metadata(p_instance, p_metadata);
@@ -1034,7 +1043,7 @@ PYBIND11_MODULE(NDIlib, m) {
 
   m.def(
       "send_send_metadata",
-      [](py::capsule instance, const NDIlib_metadata_frame_t *p_metadata) {
+      [](py::capsule instance, const PyNDIlib_metadata_frame_t *p_metadata) {
         auto p_instance =
             static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
         NDIlib_send_send_metadata(p_instance, p_metadata);
@@ -1043,7 +1052,7 @@ PYBIND11_MODULE(NDIlib, m) {
 
   m.def(
       "send_capture",
-      [](py::capsule instance, NDIlib_metadata_frame_t *p_metadata,
+      [](py::capsule instance, PyNDIlib_metadata_frame_t *p_metadata,
          uint32_t timeout_in_ms) {
         auto p_instance =
             static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
@@ -1053,7 +1062,7 @@ PYBIND11_MODULE(NDIlib, m) {
 
   m.def(
       "send_free_metadata",
-      [](py::capsule instance, const NDIlib_metadata_frame_t *p_metadata) {
+      [](py::capsule instance, const PyNDIlib_metadata_frame_t *p_metadata) {
         auto p_instance =
             static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
         NDIlib_send_free_metadata(p_instance, p_metadata);
@@ -1090,7 +1099,7 @@ PYBIND11_MODULE(NDIlib, m) {
 
   m.def(
       "send_add_connection_metadata",
-      [](py::capsule instance, const NDIlib_metadata_frame_t *p_metadata) {
+      [](py::capsule instance, const PyNDIlib_metadata_frame_t *p_metadata) {
         auto p_instance =
             static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
         NDIlib_send_add_connection_metadata(p_instance, p_metadata);
