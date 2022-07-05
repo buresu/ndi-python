@@ -179,52 +179,72 @@ PYBIND11_MODULE(NDIlib, m) {
                     &PyNDIlib_video_frame_v2_t::set_metadata)
       .def_readwrite("timestamp", &PyNDIlib_video_frame_v2_t::timestamp);
 
-  py::class_<NDIlib_audio_frame_v2_t>(m, "AudioFrameV2")
-      .def(py::init<int, int, int, int64_t, float *, int, const char *,
-                    int64_t>(),
-           py::arg("sample_rate") = 48000, py::arg("no_channels") = 2,
-           py::arg("no_samples") = 0,
+  class PyNDIlib_audio_frame_v2_t : public NDIlib_audio_frame_v2_t {
+  public:
+    PyNDIlib_audio_frame_v2_t(
+        int sample_rate = 48000,
+        int64_t timecode = NDIlib_send_timecode_synthesize,
+        const py::array_t<float> &data = py::array_t<float>(),
+        const std::string &metadata = "", int64_t timestamp = 0)
+        : NDIlib_audio_frame_v2_t() {
+      this->sample_rate = sample_rate;
+      this->timecode = timecode;
+      this->timestamp = timestamp;
+      set_data(data);
+      set_metadata(metadata);
+    }
+    ~PyNDIlib_audio_frame_v2_t() = default;
+
+    py::array data() const {
+      size_t col = this->no_samples;
+      size_t row = this->no_channels;
+      size_t size = sizeof(float);
+      auto buffer_info = py::buffer_info(this->p_data, size,
+                                         py::format_descriptor<float>::format(),
+                                         2, {row, col}, {col * size, size});
+      return py::array(buffer_info);
+    }
+
+    void set_data(const py::array_t<float> &array) {
+      auto info = array.request();
+      auto size = info.shape[0] * info.shape[1];
+      auto data = static_cast<float *>(info.ptr);
+      if (size != _data.size())
+        _data.reserve(size);
+      std::memcpy(&_data[0], data, size * sizeof(float));
+      this->p_data = size > 0 ? &_data[0] : nullptr;
+      this->no_channels = info.shape[0];
+      this->no_samples = info.shape[1];
+      this->channel_stride_in_bytes = info.strides[0];
+    }
+
+    std::string metadata() const {
+      return this->p_metadata ? std::string(this->p_metadata) : "";
+    }
+
+    void set_metadata(const std::string &metadata) {
+      _metadata = py::str(metadata);
+      this->p_metadata = _metadata.empty() ? nullptr : _metadata.c_str();
+    }
+
+  private:
+    std::vector<float> _data;
+    std::string _metadata;
+  };
+
+  py::class_<PyNDIlib_audio_frame_v2_t>(m, "AudioFrameV2")
+      .def(py::init<int, int64_t, const py::array_t<float> &,
+                    const std::string &, int64_t>(),
+           py::arg("sample_rate") = 48000,
            py::arg("timecode") = NDIlib_send_timecode_synthesize,
-           py::arg("p_data") = 0, py::arg("channel_stride_in_bytes") = 0,
-           py::arg("p_metadata") = nullptr, py::arg("timestamp") = 0)
-      .def_readwrite("sample_rate", &NDIlib_audio_frame_v2_t::sample_rate)
-      .def_readwrite("no_channels", &NDIlib_audio_frame_v2_t::no_channels)
-      .def_readwrite("no_samples", &NDIlib_audio_frame_v2_t::no_samples)
-      .def_readwrite("timecode", &NDIlib_audio_frame_v2_t::timecode)
-      .def_property(
-          "data",
-          [](const NDIlib_audio_frame_v2_t &self) {
-            size_t col = self.no_samples;
-            size_t row = self.no_channels;
-            size_t size = sizeof(float);
-            auto buffer_info = py::buffer_info(
-                self.p_data, size, py::format_descriptor<float>::format(), 2,
-                {row, col}, {col * size, size});
-            return py::array(buffer_info);
-          },
-          [](NDIlib_audio_frame_v2_t &self, py::array_t<float> &array) {
-            auto info = array.request();
-            self.p_data = static_cast<float *>(info.ptr);
-            self.no_channels = info.shape[0];
-            self.no_samples = info.shape[1];
-            self.channel_stride_in_bytes = info.strides[0];
-          })
-      .def_readwrite("channel_stride_in_bytes",
-                     &NDIlib_audio_frame_v2_t::channel_stride_in_bytes)
-      .def_property(
-          "metadata",
-          [](const NDIlib_audio_frame_v2_t &self) {
-            if (!self.p_metadata)
-              return py::str();
-            auto ustr = PyUnicode_DecodeLocale(self.p_metadata, nullptr);
-            return py::reinterpret_steal<py::str>(ustr);
-          },
-          [](NDIlib_audio_frame_v2_t &self, const std::string &data) {
-            static std::unordered_map<NDIlib_audio_frame_v2_t *, std::string>
-                strs;
-            strs[&self] = py::str(data);
-            self.p_metadata = strs[&self].c_str();
-          })
+           py::arg("data") = py::array_t<float>(), py::arg("metadata") = "",
+           py::arg("timestamp") = 0)
+      .def_readwrite("sample_rate", &PyNDIlib_audio_frame_v2_t::sample_rate)
+      .def_readwrite("timecode", &PyNDIlib_audio_frame_v2_t::timecode)
+      .def_property("data", &PyNDIlib_audio_frame_v2_t::data,
+                    &PyNDIlib_audio_frame_v2_t::set_data)
+      .def_property("metadata", &PyNDIlib_audio_frame_v2_t::metadata,
+                    &PyNDIlib_audio_frame_v2_t::set_metadata)
       .def_readwrite("timestamp", &NDIlib_audio_frame_v2_t::timestamp);
 
   py::class_<NDIlib_audio_frame_v3_t>(m, "AudioFrameV3")
@@ -534,13 +554,13 @@ PYBIND11_MODULE(NDIlib, m) {
         auto p_instance =
             static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
         PyNDIlib_video_frame_v2_t video_frame;
-        NDIlib_audio_frame_v2_t audio_frame;
+        PyNDIlib_audio_frame_v2_t audio_frame;
         PyNDIlib_metadata_frame_t metadata_frame;
         auto type =
             NDIlib_recv_capture_v2(p_instance, &video_frame, &audio_frame,
                                    &metadata_frame, timeout_in_ms);
         return std::tuple<NDIlib_frame_type_e, PyNDIlib_video_frame_v2_t,
-                          NDIlib_audio_frame_v2_t, PyNDIlib_metadata_frame_t>(
+                          PyNDIlib_audio_frame_v2_t, PyNDIlib_metadata_frame_t>(
             type, video_frame, audio_frame, metadata_frame);
       },
       py::arg("instance"), py::arg("timeout_in_ms"));
@@ -573,7 +593,7 @@ PYBIND11_MODULE(NDIlib, m) {
 
   m.def(
       "recv_free_audio_v2",
-      [](py::capsule instance, const NDIlib_audio_frame_v2_t *p_audio_data) {
+      [](py::capsule instance, const PyNDIlib_audio_frame_v2_t *p_audio_data) {
         auto p_instance =
             static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
         NDIlib_recv_free_audio_v2(p_instance, p_audio_data);
@@ -1017,7 +1037,7 @@ PYBIND11_MODULE(NDIlib, m) {
 
   m.def(
       "send_send_audio_v2",
-      [](py::capsule instance, const NDIlib_audio_frame_v2_t *p_audio_data) {
+      [](py::capsule instance, const PyNDIlib_audio_frame_v2_t *p_audio_data) {
         auto p_instance =
             static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
         NDIlib_send_send_audio_v2(p_instance, p_audio_data);
@@ -1408,7 +1428,7 @@ PYBIND11_MODULE(NDIlib, m) {
          int no_samples) {
         auto p_instance = static_cast<NDIlib_framesync_instance_type *>(
             instance.get_pointer());
-        NDIlib_audio_frame_v2_t audio_frame;
+        PyNDIlib_audio_frame_v2_t audio_frame;
         NDIlib_framesync_capture_audio(p_instance, &audio_frame, sample_rate,
                                        no_channels, no_samples);
         return audio_frame;
@@ -1432,7 +1452,7 @@ PYBIND11_MODULE(NDIlib, m) {
 
   m.def(
       "framesync_free_audio",
-      [](py::capsule instance, NDIlib_audio_frame_v2_t *p_audio_data) {
+      [](py::capsule instance, PyNDIlib_audio_frame_v2_t *p_audio_data) {
         auto p_instance = static_cast<NDIlib_framesync_instance_type *>(
             instance.get_pointer());
         NDIlib_framesync_free_audio(p_instance, p_audio_data);
