@@ -95,93 +95,89 @@ PYBIND11_MODULE(NDIlib, m) {
                                      : _source_url_addresses[&self].c_str();
           });
 
-  static std::unordered_map<NDIlib_video_frame_v2_t *, std::vector<uint8_t>>
-      _video_frame_v2_data;
-  static std::unordered_map<NDIlib_video_frame_v2_t *, std::string>
-      _video_frame_v2_metadata;
+  class PyNDIlib_video_frame_v2_t : public NDIlib_video_frame_v2_t {
+  public:
+    PyNDIlib_video_frame_v2_t(
+        NDIlib_FourCC_video_type_e FourCC = NDIlib_FourCC_video_type_UYVY,
+        int frame_rate_N = 30000, int frame_rate_D = 1001,
+        NDIlib_frame_format_type_e frame_format_type =
+            NDIlib_frame_format_type_progressive,
+        int64_t timecode = 0,
+        const py::array_t<uint8_t> &data = py::array_t<uint8_t>(),
+        const std::string &metadata = "", int64_t timestamp = 0)
+        : NDIlib_video_frame_v2_t() {
+      this->FourCC = FourCC;
+      this->frame_rate_N = frame_rate_N;
+      this->frame_rate_D = frame_rate_D;
+      this->frame_format_type = frame_format_type;
+      this->timecode = timecode;
+      this->timestamp = timestamp;
+      set_data(data);
+      set_metadata(metadata);
+    }
+    ~PyNDIlib_video_frame_v2_t() = default;
 
-  py::class_<NDIlib_video_frame_v2_t>(m, "VideoFrameV2")
-      .def(py::init([](NDIlib_FourCC_video_type_e FourCC, int frame_rate_N,
-                       int frame_rate_D,
-                       NDIlib_frame_format_type_e frame_format_type,
-                       int64_t timecode, const py::array_t<uint8_t> &array, int,
-                       const std::string &metadata, int64_t timestamp) {
-             auto instance = new NDIlib_video_frame_v2_t();
-             instance->FourCC = FourCC;
-             instance->frame_rate_N = frame_rate_N;
-             instance->frame_rate_D = frame_rate_D;
-             instance->frame_format_type = frame_format_type;
-             instance->timecode = timecode;
-             instance->timestamp = timestamp;
-             auto info = array.request();
-             auto size = info.strides[0] * info.shape[0];
-             auto data = static_cast<uint8_t *>(info.ptr);
-             if (size != _video_frame_v2_data[instance].size())
-               _video_frame_v2_data[instance].reserve(size);
-             std::memcpy(&_video_frame_v2_data[instance][0], data, size);
-             instance->p_data =
-                 size > 0 ? &_video_frame_v2_data[instance][0] : nullptr;
-             instance->picture_aspect_ratio =
-                 info.shape[1] / float(info.shape[0]);
-             instance->xres = info.shape[1];
-             instance->yres = info.shape[0];
-             instance->line_stride_in_bytes = info.strides[0];
-             _video_frame_v2_metadata[instance] = py::str(metadata);
-             instance->p_metadata =
-                 metadata.empty() ? nullptr
-                                  : _video_frame_v2_metadata[instance].c_str();
-             return instance;
-           }),
+    py::array data() const {
+      int r = this->yres;
+      int c = this->xres;
+      size_t b1 = this->line_stride_in_bytes;
+      size_t b2 = c > 0 ? b1 / c : 0;
+      size_t b3 = sizeof(uint8_t);
+      auto buffer_info = py::buffer_info(
+          this->p_data, b3, py::format_descriptor<uint8_t>::format(), 3,
+          {r, c, int(b2)}, {b1, b2, b3});
+      return py::array(buffer_info);
+    }
+
+    void set_data(const py::array_t<uint8_t> &array) {
+      auto info = array.request();
+      auto size = info.strides[0] * info.shape[0];
+      auto data = static_cast<uint8_t *>(info.ptr);
+      if (size != _data.size())
+        _data.reserve(size);
+      std::memcpy(&_data[0], data, size);
+      this->p_data = size > 0 ? &_data[0] : nullptr;
+      this->picture_aspect_ratio = info.shape[1] / float(info.shape[0]);
+      this->xres = info.shape[1];
+      this->yres = info.shape[0];
+      this->line_stride_in_bytes = info.strides[0];
+    }
+
+    std::string metadata() const {
+      return this->p_metadata ? std::string(this->p_metadata) : "";
+    }
+
+    void set_metadata(const std::string &metadata) {
+      _metadata = py::str(metadata);
+      this->p_metadata = _metadata.empty() ? nullptr : _metadata.c_str();
+    }
+
+  private:
+    std::vector<uint8_t> _data;
+    std::string _metadata;
+  };
+
+  py::class_<PyNDIlib_video_frame_v2_t>(m, "VideoFrameV2")
+      .def(py::init<NDIlib_FourCC_video_type_e, int, int,
+                    NDIlib_frame_format_type_e, int64_t,
+                    const py::array_t<uint8_t> &, const std::string &,
+                    int64_t>(),
            py::arg("FourCC") = NDIlib_FourCC_video_type_UYVY,
            py::arg("frame_rate_N") = 30000, py::arg("frame_rate_D") = 1001,
            py::arg("frame_format_type") = NDIlib_frame_format_type_progressive,
            py::arg("timecode") = 0, py::arg("data") = py::array_t<uint8_t>(),
-           py::arg("line_stride_in_bytes") = 0, py::arg("metadata") = "",
-           py::arg("timestamp") = 0)
-      .def_readwrite("FourCC", &NDIlib_video_frame_v2_t::FourCC)
-      .def_readwrite("frame_rate_N", &NDIlib_video_frame_v2_t::frame_rate_N)
-      .def_readwrite("frame_rate_D", &NDIlib_video_frame_v2_t::frame_rate_D)
+           py::arg("metadata") = "", py::arg("timestamp") = 0)
+      .def_readwrite("FourCC", &PyNDIlib_video_frame_v2_t::FourCC)
+      .def_readwrite("frame_rate_N", &PyNDIlib_video_frame_v2_t::frame_rate_N)
+      .def_readwrite("frame_rate_D", &PyNDIlib_video_frame_v2_t::frame_rate_D)
       .def_readwrite("frame_format_type",
-                     &NDIlib_video_frame_v2_t::frame_format_type)
-      .def_readwrite("timecode", &NDIlib_video_frame_v2_t::timecode)
-      .def_property(
-          "data",
-          [](const NDIlib_video_frame_v2_t &self) {
-            int r = self.yres;
-            int c = self.xres;
-            size_t b1 = self.line_stride_in_bytes;
-            size_t b2 = c > 0 ? b1 / c : 0;
-            size_t b3 = sizeof(uint8_t);
-            auto buffer_info = py::buffer_info(
-                self.p_data, b3, py::format_descriptor<uint8_t>::format(), 3,
-                {r, c, int(b2)}, {b1, b2, b3});
-            return py::array(buffer_info);
-          },
-          [](NDIlib_video_frame_v2_t &self, const py::array_t<uint8_t> &array) {
-            auto info = array.request();
-            auto size = info.strides[0] * info.shape[0];
-            auto data = static_cast<uint8_t *>(info.ptr);
-            if (size != _video_frame_v2_data[&self].size())
-              _video_frame_v2_data[&self].reserve(size);
-            std::memcpy(&_video_frame_v2_data[&self][0], data, size);
-            self.p_data = size > 0 ? &_video_frame_v2_data[&self][0] : nullptr;
-            self.picture_aspect_ratio = info.shape[1] / float(info.shape[0]);
-            self.xres = info.shape[1];
-            self.yres = info.shape[0];
-            self.line_stride_in_bytes = info.strides[0];
-          })
-      .def_property(
-          "metadata",
-          [](const NDIlib_video_frame_v2_t &self) {
-            return self.p_metadata ? std::string(self.p_metadata) : "";
-          },
-          [](NDIlib_video_frame_v2_t &self, const std::string &metadata) {
-            _video_frame_v2_metadata[&self] = py::str(metadata);
-            self.p_metadata = metadata.empty()
-                                  ? nullptr
-                                  : _video_frame_v2_metadata[&self].c_str();
-          })
-      .def_readwrite("timestamp", &NDIlib_video_frame_v2_t::timestamp);
+                     &PyNDIlib_video_frame_v2_t::frame_format_type)
+      .def_readwrite("timecode", &PyNDIlib_video_frame_v2_t::timecode)
+      .def_property("data", &PyNDIlib_video_frame_v2_t::data,
+                    &PyNDIlib_video_frame_v2_t::set_data)
+      .def_property("metadata", &PyNDIlib_video_frame_v2_t::metadata,
+                    &PyNDIlib_video_frame_v2_t::set_metadata)
+      .def_readwrite("timestamp", &PyNDIlib_video_frame_v2_t::timestamp);
 
   py::class_<NDIlib_audio_frame_v2_t>(m, "AudioFrameV2")
       .def(py::init<int, int, int, int64_t, float *, int, const char *,
@@ -537,15 +533,13 @@ PYBIND11_MODULE(NDIlib, m) {
       [](py::capsule instance, uint32_t timeout_in_ms) {
         auto p_instance =
             static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        NDIlib_video_frame_v2_t video_frame;
+        PyNDIlib_video_frame_v2_t video_frame;
         NDIlib_audio_frame_v2_t audio_frame;
         PyNDIlib_metadata_frame_t metadata_frame;
-        auto p_metadata_frame =
-            static_cast<NDIlib_metadata_frame_t *>(&metadata_frame);
         auto type =
             NDIlib_recv_capture_v2(p_instance, &video_frame, &audio_frame,
-                                   p_metadata_frame, timeout_in_ms);
-        return std::tuple<NDIlib_frame_type_e, NDIlib_video_frame_v2_t,
+                                   &metadata_frame, timeout_in_ms);
+        return std::tuple<NDIlib_frame_type_e, PyNDIlib_video_frame_v2_t,
                           NDIlib_audio_frame_v2_t, PyNDIlib_metadata_frame_t>(
             type, video_frame, audio_frame, metadata_frame);
       },
@@ -556,15 +550,13 @@ PYBIND11_MODULE(NDIlib, m) {
       [](py::capsule instance, uint32_t timeout_in_ms) {
         auto p_instance =
             static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        NDIlib_video_frame_v2_t video_frame;
+        PyNDIlib_video_frame_v2_t video_frame;
         NDIlib_audio_frame_v3_t audio_frame;
         PyNDIlib_metadata_frame_t metadata_frame;
-        auto p_metadata_frame =
-            static_cast<NDIlib_metadata_frame_t *>(&metadata_frame);
         auto type =
             NDIlib_recv_capture_v3(p_instance, &video_frame, &audio_frame,
-                                   p_metadata_frame, timeout_in_ms);
-        return std::tuple<NDIlib_frame_type_e, NDIlib_video_frame_v2_t,
+                                   &metadata_frame, timeout_in_ms);
+        return std::tuple<NDIlib_frame_type_e, PyNDIlib_video_frame_v2_t,
                           NDIlib_audio_frame_v3_t, PyNDIlib_metadata_frame_t>(
             type, video_frame, audio_frame, metadata_frame);
       },
@@ -572,7 +564,7 @@ PYBIND11_MODULE(NDIlib, m) {
 
   m.def(
       "recv_free_video_v2",
-      [](py::capsule instance, const NDIlib_video_frame_v2_t *p_video_data) {
+      [](py::capsule instance, const PyNDIlib_video_frame_v2_t *p_video_data) {
         auto p_instance =
             static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
         NDIlib_recv_free_video_v2(p_instance, p_video_data);
@@ -1007,7 +999,7 @@ PYBIND11_MODULE(NDIlib, m) {
 
   m.def(
       "send_send_video_v2",
-      [](py::capsule instance, const NDIlib_video_frame_v2_t *p_video_data) {
+      [](py::capsule instance, const PyNDIlib_video_frame_v2_t *p_video_data) {
         auto p_instance =
             static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
         NDIlib_send_send_video_v2(p_instance, p_video_data);
@@ -1016,7 +1008,7 @@ PYBIND11_MODULE(NDIlib, m) {
 
   m.def(
       "send_send_video_async_v2",
-      [](py::capsule instance, const NDIlib_video_frame_v2_t *p_video_data) {
+      [](py::capsule instance, const PyNDIlib_video_frame_v2_t *p_video_data) {
         auto p_instance =
             static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
         NDIlib_send_send_video_async_v2(p_instance, p_video_data);
@@ -1470,7 +1462,7 @@ PYBIND11_MODULE(NDIlib, m) {
       [](py::capsule instance, NDIlib_frame_format_type_e field_type) {
         auto p_instance = static_cast<NDIlib_framesync_instance_type *>(
             instance.get_pointer());
-        NDIlib_video_frame_v2_t video_frame;
+        PyNDIlib_video_frame_v2_t video_frame;
         NDIlib_framesync_capture_video(p_instance, &video_frame, field_type);
         return video_frame;
       },
@@ -1479,7 +1471,7 @@ PYBIND11_MODULE(NDIlib, m) {
 
   m.def(
       "framesync_free_video",
-      [](py::capsule instance, NDIlib_video_frame_v2_t *p_video_data) {
+      [](py::capsule instance, PyNDIlib_video_frame_v2_t *p_video_data) {
         auto p_instance = static_cast<NDIlib_framesync_instance_type *>(
             instance.get_pointer());
         NDIlib_framesync_free_video(p_instance, p_video_data);
