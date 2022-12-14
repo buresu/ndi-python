@@ -349,6 +349,7 @@ PYBIND11_MODULE(NDIlib, m) {
       [](py::capsule instance, uint32_t timeout_in_ms) {
         auto p_instance =
             static_cast<NDIlib_find_instance_type *>(instance.get_pointer());
+        py::gil_scoped_release release;
         return NDIlib_find_wait_for_sources(p_instance, timeout_in_ms);
       },
       py::arg("instance"), py::arg("timeout_in_ms"));
@@ -458,6 +459,7 @@ PYBIND11_MODULE(NDIlib, m) {
       [](py::capsule instance, uint32_t timeout_in_ms) {
         auto p_instance =
             static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
+        py::gil_scoped_release release;
         NDIlib_video_frame_v2_t video_frame;
         NDIlib_audio_frame_v2_t audio_frame;
         NDIlib_metadata_frame_t metadata_frame;
@@ -475,6 +477,7 @@ PYBIND11_MODULE(NDIlib, m) {
       [](py::capsule instance, uint32_t timeout_in_ms) {
         auto p_instance =
             static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
+        py::gil_scoped_release release;
         NDIlib_video_frame_v2_t video_frame;
         NDIlib_audio_frame_v3_t audio_frame;
         NDIlib_metadata_frame_t metadata_frame;
@@ -963,6 +966,7 @@ PYBIND11_MODULE(NDIlib, m) {
          uint32_t timeout_in_ms) {
         auto p_instance =
             static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
+        py::gil_scoped_release release;
         NDIlib_send_capture(p_instance, p_metadata, timeout_in_ms);
       },
       py::arg("instance"), py::arg("metadata"), py::arg("timeout_in_ms"));
@@ -982,6 +986,7 @@ PYBIND11_MODULE(NDIlib, m) {
          uint32_t timeout_in_ms) {
         auto p_instance =
             static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
+        py::gil_scoped_release release;
         return NDIlib_send_get_tally(p_instance, p_tally, timeout_in_ms);
       },
       py::arg("instance"), py::arg("tally"), py::arg("timeout_in_ms"));
@@ -991,6 +996,7 @@ PYBIND11_MODULE(NDIlib, m) {
       [](py::capsule instance, uint32_t timeout_in_ms) {
         auto p_instance =
             static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
+        py::gil_scoped_release release;
         return NDIlib_send_get_no_connections(p_instance, timeout_in_ms);
       },
       py::arg("instance"), py::arg("timeout_in_ms"));
@@ -1104,6 +1110,7 @@ PYBIND11_MODULE(NDIlib, m) {
       [](py::capsule instance, uint32_t timeout_in_ms) {
         auto p_instance =
             static_cast<NDIlib_routing_instance_type *>(instance.get_pointer());
+        py::gil_scoped_release release;
         return NDIlib_routing_get_no_connections(p_instance, timeout_in_ms);
       },
       py::arg("instance"), py::arg("timeout_in_ms"));
