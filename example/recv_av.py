@@ -11,7 +11,13 @@ def main():
     if not ndi.initialize():
         return 0
 
-    ndi_find = ndi.find_create_v2()
+
+    NDI_find_create_desc = ndi.FindCreate()
+    #ndi_source_ip_list = "192.168.100.48,192.168.100.88,192.168.100.95"
+    ndi_source_ip_list = "192.168.100.95"
+    NDI_find_create_desc.extra_ips = ndi_source_ip_list
+    ndi_find = ndi.find_create_v2(NDI_find_create_desc)
+
 
     if ndi_find is None:
         return 0
