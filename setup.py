@@ -1,4 +1,5 @@
 import os
+import sys
 import shutil
 from pathlib import Path
 from setuptools import setup, Extension
@@ -20,7 +21,8 @@ class CMakeBuild(build_ext):
         install_dir = os.path.join(build_dir, 'install')
         if not self.dry_run:
             cmake_args = ['cmake', '..',
-                          '-DCMAKE_INSTALL_PREFIX=%s' % install_dir]
+                          '-DCMAKE_INSTALL_PREFIX=%s' % install_dir,
+                          '-DPYTHON_EXECUTABLE=%s' % sys.executable]
             if "CMAKE_ARGS" in os.environ:
                 cmake_args += [
                     item for item in os.environ["CMAKE_ARGS"].split(" ") if item]
