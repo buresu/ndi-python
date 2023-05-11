@@ -16,7 +16,7 @@ PYBIND11_MODULE(NDIlib, m) {
       .value("FRAME_TYPE_AUDIO", NDIlib_frame_type_audio)
       .value("FRAME_TYPE_METADATA", NDIlib_frame_type_metadata)
       .value("FRAME_TYPE_ERROR", NDIlib_frame_type_error)
-      .value("FRANE_TYPE_STATUS_CHANGE", NDIlib_frame_type_status_change)
+      .value("FRAME_TYPE_STATUS_CHANGE", NDIlib_frame_type_status_change)
       .value("FRAME_TYPE_MAX", NDIlib_frame_type_max)
       .export_values();
 
