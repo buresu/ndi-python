@@ -163,4 +163,15 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+.venv
+.DS_Store
 # End of https://www.gitignore.io/api/c++,code,cmake,python
+.mcp.json
+CLAUDE.md
+batch_remove_comments.py
+COMMENT_REMOVAL_README.md
+example_usage.py
+remove_comments.py
+src/main.cpp.backup
+test_comment_removal_clean.cpp
+test_comment_removal.cpp

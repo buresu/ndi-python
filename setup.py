@@ -51,7 +51,7 @@ long_description = (this_directory / "README.md").read_text()
 # setup
 setup(
     name='ndi-python',
-    version='5.1.1.5',
+    version='6.2.0.3',
     description='Wrapper package for NDI SDK python bindings.',
     long_description=long_description,
     long_description_content_type='text/markdown',
@@ -80,6 +80,9 @@ setup(
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
+        'Programming Language :: Python :: 3.12',
+        'Programming Language :: Python :: 3.13',
         'Programming Language :: Python :: Implementation :: CPython',
         'Topic :: Software Development',
         'Topic :: Software Development :: Libraries',

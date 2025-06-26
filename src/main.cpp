@@ -1,30 +1,1377 @@
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
-
 #include <Processing.NDI.Lib.h>
-
+#include <Processing.NDI.RecvAdvertiser.h>
+#include <Processing.NDI.RecvListener.h>
+#include <unordered_map>
+#include <memory>
+#include <mutex>
+#include <chrono>
+#include <thread>
 namespace py = pybind11;
-
+using namespace pybind11::literals;
+namespace ndi_utils {
+    inline const char* string_to_nullable_cstr(const std::string& str) {
+        return str.empty() ? nullptr : str.c_str();
+    }
+    inline void set_metadata_safe(std::vector<char>& buffer, const char*& target_ptr, const std::string& meta) {
+        if (meta.empty()) {
+            buffer.clear();
+            target_ptr = nullptr;
+        } else {
+            buffer.assign(meta.begin(), meta.end());
+            buffer.push_back('\0');
+            target_ptr = buffer.data();
+        }
+    }
+    inline std::string get_frame_type_description(NDIlib_frame_type_e frame_type) {
+        switch (frame_type) {
+            case NDIlib_frame_type_none:
+                return "No frame (timeout)";
+            case NDIlib_frame_type_video:
+                return "Video frame captured";
+            case NDIlib_frame_type_audio:
+                return "Audio frame captured";
+            case NDIlib_frame_type_metadata:
+                return "Metadata captured";
+            case NDIlib_frame_type_error:
+                return "Capture error occurred";
+            case NDIlib_frame_type_status_change:
+                return "Status change detected";
+            default:
+                return "Unknown frame type (" + std::to_string(static_cast<int>(frame_type)) + ")";
+        }
+    }
+}
+class NDIException : public std::exception {
+public:
+    NDIException(const std::string& message) : message_(message) {}
+    const char* what() const noexcept override {
+        return message_.c_str();
+    }
+private:
+    std::string message_;
+};
+inline void check_ndi_result(bool result, const std::string& operation) {
+    if (!result) {
+        throw NDIException("NDI operation failed: " + operation);
+    }
+}
+enum class NDIErrorSeverity {
+    WARNING,
+    ERROR,
+    CRITICAL
+};
+struct NDIOperationResult {
+    bool success;
+    NDIErrorSeverity severity;
+    std::string message;
+    NDIOperationResult(bool s, NDIErrorSeverity sev = NDIErrorSeverity::ERROR,
+                      const std::string& msg = "")
+        : success(s), severity(sev), message(msg) {}
+    operator bool() const { return success; }
+};
+struct CaptureResult {
+    NDIlib_frame_type_e frame_type;
+    py::object video;
+    py::object audio;
+    py::object metadata;
+    bool success;
+    std::string status_message;
+    CaptureResult(NDIlib_frame_type_e type = NDIlib_frame_type_none,
+                  bool success = false,
+                  const std::string& message = "")
+        : frame_type(type), success(success), status_message(message),
+          video(py::none()), audio(py::none()), metadata(py::none()) {}
+    bool has_video() const { return frame_type == NDIlib_frame_type_video; }
+    bool has_audio() const { return frame_type == NDIlib_frame_type_audio; }
+    bool has_metadata() const { return frame_type == NDIlib_frame_type_metadata; }
+    bool is_timeout() const { return frame_type == NDIlib_frame_type_none; }
+    bool is_error() const { return frame_type == NDIlib_frame_type_error; }
+    bool is_status_change() const { return frame_type == NDIlib_frame_type_status_change; }
+    std::tuple<NDIlib_frame_type_e, py::object, py::object, py::object> to_tuple() const {
+        return std::make_tuple(frame_type, video, audio, metadata);
+    }
+    std::tuple<bool, std::string, NDIlib_frame_type_e, py::object, py::object, py::object> to_safe_tuple() const {
+        return std::make_tuple(success, status_message, frame_type, video, audio, metadata);
+    }
+};
+class Source {
+private:
+    NDIlib_source_t source_;
+    std::string ndi_name_;
+    std::string url_address_;
+public:
+    Source(const std::string& name = "", const std::string& url = "")
+        : ndi_name_(name), url_address_(url) {
+        source_.p_ndi_name = ndi_utils::string_to_nullable_cstr(ndi_name_);
+        source_.p_url_address = ndi_utils::string_to_nullable_cstr(url_address_);
+    }
+    Source(const Source& other)
+        : ndi_name_(other.ndi_name_), url_address_(other.url_address_) {
+        source_.p_ndi_name = ndi_utils::string_to_nullable_cstr(ndi_name_);
+        source_.p_url_address = ndi_utils::string_to_nullable_cstr(url_address_);
+    }
+    Source& operator=(const Source& other) {
+        if (this != &other) {
+            ndi_name_ = other.ndi_name_;
+            url_address_ = other.url_address_;
+            source_.p_ndi_name = ndi_utils::string_to_nullable_cstr(ndi_name_);
+            source_.p_url_address = ndi_utils::string_to_nullable_cstr(url_address_);
+        }
+        return *this;
+    }
+    Source(Source&& other) noexcept
+        : ndi_name_(std::move(other.ndi_name_)),
+          url_address_(std::move(other.url_address_)) {
+        source_.p_ndi_name = ndi_utils::string_to_nullable_cstr(ndi_name_);
+        source_.p_url_address = ndi_utils::string_to_nullable_cstr(url_address_);
+    }
+    Source& operator=(Source&& other) noexcept {
+        if (this != &other) {
+            ndi_name_ = std::move(other.ndi_name_);
+            url_address_ = std::move(other.url_address_);
+            source_.p_ndi_name = ndi_utils::string_to_nullable_cstr(ndi_name_);
+            source_.p_url_address = ndi_utils::string_to_nullable_cstr(url_address_);
+        }
+        return *this;
+    }
+    std::string get_ndi_name() const { return ndi_name_; }
+    void set_ndi_name(const std::string& name) {
+        ndi_name_ = name;
+        source_.p_ndi_name = ndi_utils::string_to_nullable_cstr(ndi_name_);
+    }
+    std::string get_url_address() const { return url_address_; }
+    void set_url_address(const std::string& url) {
+        url_address_ = url;
+        source_.p_url_address = ndi_utils::string_to_nullable_cstr(url_address_);
+    }
+    const NDIlib_source_t* get() const { return &source_; }
+    NDIlib_source_t* get() { return &source_; }
+};
+class VideoFrameV2 {
+private:
+    NDIlib_video_frame_v2_t frame_;
+    py::array_t<uint8_t> data_array_;
+    std::vector<char> metadata_buffer_;
+public:
+    VideoFrameV2(int xres = 0, int yres = 0,
+                 NDIlib_FourCC_video_type_e fourcc = NDIlib_FourCC_video_type_UYVY,
+                 int frame_rate_N = 30000, int frame_rate_D = 1001,
+                 float aspect_ratio = 0.0f,
+                 NDIlib_frame_format_type_e format = NDIlib_frame_format_type_progressive,
+                 int64_t timecode = 0, int64_t timestamp = 0) {
+        frame_.xres = xres;
+        frame_.yres = yres;
+        frame_.FourCC = fourcc;
+        frame_.frame_rate_N = frame_rate_N;
+        frame_.frame_rate_D = frame_rate_D;
+        frame_.picture_aspect_ratio = aspect_ratio;
+        frame_.frame_format_type = format;
+        frame_.timecode = timecode;
+        frame_.p_data = nullptr;
+        frame_.line_stride_in_bytes = 0;
+        frame_.p_metadata = nullptr;
+        frame_.timestamp = timestamp;
+    }
+    explicit VideoFrameV2(const NDIlib_video_frame_v2_t& captured_frame) {
+        frame_ = captured_frame;
+        if (frame_.p_metadata) {
+            std::string meta_str(frame_.p_metadata);
+            set_metadata(meta_str);
+        }
+    }
+    void set_data(py::array_t<uint8_t> array) {
+        data_array_ = array;
+        auto info = array.request();
+        frame_.p_data = static_cast<uint8_t*>(info.ptr);
+        if (info.ndim >= 2) {
+            frame_.yres = info.shape[0];
+            frame_.xres = info.shape[1];
+            frame_.line_stride_in_bytes = info.strides[0];
+            if (frame_.xres > 0) {
+                frame_.picture_aspect_ratio = frame_.xres / float(frame_.yres);
+            }
+        }
+    }
+    py::array_t<uint8_t> get_data() const {
+        if (!frame_.p_data) return py::array_t<uint8_t>();
+        if (data_array_) return data_array_;
+        std::vector<ssize_t> shape = {(ssize_t)frame_.yres, (ssize_t)frame_.xres,
+                                     (ssize_t)(frame_.line_stride_in_bytes / frame_.xres)};
+        std::vector<ssize_t> strides = {(ssize_t)frame_.line_stride_in_bytes,
+                                       (ssize_t)(frame_.line_stride_in_bytes / frame_.xres), (ssize_t)1};
+        py::buffer_info buf_info(
+            (void*)frame_.p_data,
+            sizeof(uint8_t),
+            "B",
+            3,
+            shape,
+            strides
+        );
+        return py::array_t<uint8_t>(buf_info);
+    }
+    void set_metadata(const std::string& meta) {
+        ndi_utils::set_metadata_safe(metadata_buffer_, frame_.p_metadata, meta);
+    }
+    std::string get_metadata() const {
+        if (metadata_buffer_.empty()) {
+            return std::string();
+        }
+        return std::string(metadata_buffer_.data());
+    }
+    const NDIlib_video_frame_v2_t* get() const { return &frame_; }
+    NDIlib_video_frame_v2_t* get() { return &frame_; }
+    int get_xres() const { return frame_.xres; }
+    void set_xres(int v) { frame_.xres = v; }
+    int get_yres() const { return frame_.yres; }
+    void set_yres(int v) { frame_.yres = v; }
+    NDIlib_FourCC_video_type_e get_fourcc() const { return frame_.FourCC; }
+    void set_fourcc(NDIlib_FourCC_video_type_e v) { frame_.FourCC = v; }
+    int get_frame_rate_N() const { return frame_.frame_rate_N; }
+    void set_frame_rate_N(int v) { frame_.frame_rate_N = v; }
+    int get_frame_rate_D() const { return frame_.frame_rate_D; }
+    void set_frame_rate_D(int v) { frame_.frame_rate_D = v; }
+    float get_picture_aspect_ratio() const { return frame_.picture_aspect_ratio; }
+    void set_picture_aspect_ratio(float v) { frame_.picture_aspect_ratio = v; }
+    NDIlib_frame_format_type_e get_frame_format_type() const { return frame_.frame_format_type; }
+    void set_frame_format_type(NDIlib_frame_format_type_e v) { frame_.frame_format_type = v; }
+    int64_t get_timecode() const { return frame_.timecode; }
+    void set_timecode(int64_t v) { frame_.timecode = v; }
+    int get_line_stride_in_bytes() const { return frame_.line_stride_in_bytes; }
+    void set_line_stride_in_bytes(int v) { frame_.line_stride_in_bytes = v; }
+    int64_t get_timestamp() const { return frame_.timestamp; }
+    void set_timestamp(int64_t v) { frame_.timestamp = v; }
+};
+class CapturedVideoFrame {
+private:
+    NDIlib_video_frame_v2_t frame_;
+    py::capsule capsule_;
+public:
+    explicit CapturedVideoFrame(const NDIlib_video_frame_v2_t& frame, py::capsule cap)
+        : frame_(frame), capsule_(cap) {}
+    py::array_t<uint8_t> get_data() const {
+        if (!frame_.p_data) return py::array_t<uint8_t>();
+        std::vector<ssize_t> shape = {(ssize_t)frame_.yres, (ssize_t)frame_.xres,
+                                     (ssize_t)(frame_.line_stride_in_bytes / frame_.xres)};
+        std::vector<ssize_t> strides = {(ssize_t)frame_.line_stride_in_bytes,
+                                       (ssize_t)(frame_.line_stride_in_bytes / frame_.xres), (ssize_t)1};
+        py::buffer_info buf_info(
+            (void*)frame_.p_data,
+            sizeof(uint8_t),
+            "B",
+            3,
+            shape,
+            strides
+        );
+        return py::array_t<uint8_t>(buf_info, capsule_);
+    }
+    int get_xres() const { return frame_.xres; }
+    int get_yres() const { return frame_.yres; }
+    NDIlib_FourCC_video_type_e get_fourcc() const { return frame_.FourCC; }
+    int get_frame_rate_N() const { return frame_.frame_rate_N; }
+    int get_frame_rate_D() const { return frame_.frame_rate_D; }
+    float get_picture_aspect_ratio() const { return frame_.picture_aspect_ratio; }
+    NDIlib_frame_format_type_e get_frame_format_type() const { return frame_.frame_format_type; }
+    int64_t get_timecode() const { return frame_.timecode; }
+    int64_t get_timestamp() const { return frame_.timestamp; }
+    int get_line_stride_in_bytes() const { return frame_.line_stride_in_bytes; }
+};
+class CapturedAudioFrameV2 {
+private:
+    NDIlib_audio_frame_v2_t frame_;
+    py::capsule capsule_;
+public:
+    explicit CapturedAudioFrameV2(const NDIlib_audio_frame_v2_t& frame, py::capsule cap)
+        : frame_(frame), capsule_(cap) {}
+    py::array_t<float> get_data() const {
+        if (!frame_.p_data) return py::array_t<float>();
+        std::vector<ssize_t> shape = {(ssize_t)frame_.no_channels, (ssize_t)frame_.no_samples};
+        std::vector<ssize_t> strides = {(ssize_t)frame_.channel_stride_in_bytes, sizeof(float)};
+        py::buffer_info buf_info(
+            (void*)frame_.p_data,
+            sizeof(float),
+            "f",
+            2,
+            shape,
+            strides
+        );
+        return py::array_t<float>(buf_info, capsule_);
+    }
+    int get_sample_rate() const { return frame_.sample_rate; }
+    int get_no_channels() const { return frame_.no_channels; }
+    int get_no_samples() const { return frame_.no_samples; }
+    int64_t get_timecode() const { return frame_.timecode; }
+    int64_t get_timestamp() const { return frame_.timestamp; }
+    int get_channel_stride_in_bytes() const { return frame_.channel_stride_in_bytes; }
+};
+class CapturedAudioFrameV3 {
+private:
+    NDIlib_audio_frame_v3_t frame_;
+    py::capsule capsule_;
+public:
+    explicit CapturedAudioFrameV3(const NDIlib_audio_frame_v3_t& frame, py::capsule cap)
+        : frame_(frame), capsule_(cap) {}
+    py::array_t<uint8_t> get_data() const {
+        if (!frame_.p_data) return py::array_t<uint8_t>();
+        size_t channel_stride = frame_.channel_stride_in_bytes > 0 ?
+                               frame_.channel_stride_in_bytes : frame_.no_samples * sizeof(uint8_t);
+        std::vector<ssize_t> shape = {(ssize_t)frame_.no_channels, (ssize_t)frame_.no_samples};
+        std::vector<ssize_t> strides = {(ssize_t)channel_stride, sizeof(uint8_t)};
+        py::buffer_info buf_info(
+            (void*)frame_.p_data,
+            sizeof(uint8_t),
+            "B",
+            2,
+            shape,
+            strides
+        );
+        return py::array_t<uint8_t>(buf_info, capsule_);
+    }
+    int get_sample_rate() const { return frame_.sample_rate; }
+    int get_no_channels() const { return frame_.no_channels; }
+    int get_no_samples() const { return frame_.no_samples; }
+    int64_t get_timecode() const { return frame_.timecode; }
+    NDIlib_FourCC_audio_type_e get_fourcc() const { return frame_.FourCC; }
+    int64_t get_timestamp() const { return frame_.timestamp; }
+    int get_channel_stride_in_bytes() const { return frame_.channel_stride_in_bytes; }
+};
+class AudioFrameV2 {
+private:
+    NDIlib_audio_frame_v2_t frame_;
+    py::array_t<float> data_array_;
+    std::vector<char> metadata_buffer_;
+public:
+    AudioFrameV2(int sample_rate = 48000, int no_channels = 2, int no_samples = 0,
+                 int64_t timecode = NDIlib_send_timecode_synthesize, int64_t timestamp = 0) {
+        frame_.sample_rate = sample_rate;
+        frame_.no_channels = no_channels;
+        frame_.no_samples = no_samples;
+        frame_.timecode = timecode;
+        frame_.timestamp = timestamp;
+        frame_.p_data = nullptr;
+        frame_.channel_stride_in_bytes = 0;
+        frame_.p_metadata = nullptr;
+    }
+    explicit AudioFrameV2(const NDIlib_audio_frame_v2_t& captured_frame) {
+        frame_ = captured_frame;
+        if (frame_.p_metadata) {
+            std::string meta_str(frame_.p_metadata);
+            set_metadata(meta_str);
+        }
+    }
+    void set_data(py::array_t<float> array) {
+        data_array_ = array;
+        auto info = array.request();
+        frame_.p_data = static_cast<float*>(info.ptr);
+        frame_.no_channels = info.shape[0];
+        frame_.no_samples = info.shape[1];
+        frame_.channel_stride_in_bytes = info.strides[0];
+    }
+    py::array_t<float> get_data() const {
+        if (!frame_.p_data) return py::array_t<float>();
+        if (data_array_) return data_array_;
+        std::vector<ssize_t> shape = {(ssize_t)frame_.no_channels, (ssize_t)frame_.no_samples};
+        std::vector<ssize_t> strides = {(ssize_t)frame_.channel_stride_in_bytes, sizeof(float)};
+        py::buffer_info buf_info(
+            (void*)frame_.p_data,
+            sizeof(float),
+            "f",
+            2,
+            shape,
+            strides
+        );
+        return py::array_t<float>(buf_info);
+    }
+    void set_metadata(const std::string& meta) {
+        ndi_utils::set_metadata_safe(metadata_buffer_, frame_.p_metadata, meta);
+    }
+    std::string get_metadata() const {
+        if (metadata_buffer_.empty()) {
+            return std::string();
+        }
+        return std::string(metadata_buffer_.data());
+    }
+    const NDIlib_audio_frame_v2_t* get() const { return &frame_; }
+    NDIlib_audio_frame_v2_t* get() { return &frame_; }
+    int get_sample_rate() const { return frame_.sample_rate; }
+    void set_sample_rate(int v) { frame_.sample_rate = v; }
+    int get_no_channels() const { return frame_.no_channels; }
+    void set_no_channels(int v) { frame_.no_channels = v; }
+    int get_no_samples() const { return frame_.no_samples; }
+    void set_no_samples(int v) { frame_.no_samples = v; }
+    int64_t get_timecode() const { return frame_.timecode; }
+    void set_timecode(int64_t v) { frame_.timecode = v; }
+    int64_t get_timestamp() const { return frame_.timestamp; }
+    void set_timestamp(int64_t v) { frame_.timestamp = v; }
+    int get_channel_stride_in_bytes() const { return frame_.channel_stride_in_bytes; }
+};
+class AudioFrameV3 {
+private:
+    NDIlib_audio_frame_v3_t frame_;
+    py::array_t<uint8_t> data_array_;
+    std::vector<char> metadata_buffer_;
+public:
+    AudioFrameV3(int sample_rate = 48000, int no_channels = 2, int no_samples = 0,
+                 int64_t timecode = NDIlib_send_timecode_synthesize,
+                 NDIlib_FourCC_audio_type_e fourcc = NDIlib_FourCC_audio_type_FLTP,
+                 int64_t timestamp = 0) {
+        frame_.sample_rate = sample_rate;
+        frame_.no_channels = no_channels;
+        frame_.no_samples = no_samples;
+        frame_.timecode = timecode;
+        frame_.FourCC = fourcc;
+        frame_.timestamp = timestamp;
+        frame_.p_data = nullptr;
+        frame_.channel_stride_in_bytes = 0;
+        frame_.p_metadata = nullptr;
+    }
+    explicit AudioFrameV3(const NDIlib_audio_frame_v3_t& captured_frame) {
+        frame_ = captured_frame;
+        if (frame_.p_metadata) {
+            std::string meta_str(frame_.p_metadata);
+            set_metadata(meta_str);
+        }
+    }
+    void set_data(py::array_t<uint8_t> array) {
+        data_array_ = array;
+        auto info = array.request();
+        frame_.p_data = static_cast<uint8_t*>(info.ptr);
+        frame_.no_channels = info.shape[0];
+        frame_.no_samples = info.shape[1];
+        frame_.channel_stride_in_bytes = info.strides[0];
+    }
+    py::array_t<uint8_t> get_data() const {
+        if (!frame_.p_data) return py::array_t<uint8_t>();
+        if (data_array_) return data_array_;
+        size_t channel_stride = frame_.channel_stride_in_bytes > 0 ?
+                               frame_.channel_stride_in_bytes : frame_.no_samples * sizeof(uint8_t);
+        std::vector<ssize_t> shape = {(ssize_t)frame_.no_channels, (ssize_t)frame_.no_samples};
+        std::vector<ssize_t> strides = {(ssize_t)channel_stride, sizeof(uint8_t)};
+        py::buffer_info buf_info(
+            (void*)frame_.p_data,
+            sizeof(uint8_t),
+            "B",
+            2,
+            shape,
+            strides
+        );
+        return py::array_t<uint8_t>(buf_info);
+    }
+    void set_metadata(const std::string& meta) {
+        ndi_utils::set_metadata_safe(metadata_buffer_, frame_.p_metadata, meta);
+    }
+    std::string get_metadata() const {
+        if (metadata_buffer_.empty()) {
+            return std::string();
+        }
+        return std::string(metadata_buffer_.data());
+    }
+    const NDIlib_audio_frame_v3_t* get() const { return &frame_; }
+    NDIlib_audio_frame_v3_t* get() { return &frame_; }
+    int get_sample_rate() const { return frame_.sample_rate; }
+    void set_sample_rate(int v) { frame_.sample_rate = v; }
+    int get_no_channels() const { return frame_.no_channels; }
+    void set_no_channels(int v) { frame_.no_channels = v; }
+    int get_no_samples() const { return frame_.no_samples; }
+    void set_no_samples(int v) { frame_.no_samples = v; }
+    int64_t get_timecode() const { return frame_.timecode; }
+    void set_timecode(int64_t v) { frame_.timecode = v; }
+    NDIlib_FourCC_audio_type_e get_fourcc() const { return frame_.FourCC; }
+    void set_fourcc(NDIlib_FourCC_audio_type_e v) { frame_.FourCC = v; }
+    int64_t get_timestamp() const { return frame_.timestamp; }
+    void set_timestamp(int64_t v) { frame_.timestamp = v; }
+    int get_channel_stride_in_bytes() const { return frame_.channel_stride_in_bytes; }
+};
+class MetadataFrame {
+private:
+    NDIlib_metadata_frame_t frame_;
+    std::vector<char> buffer_;
+public:
+    MetadataFrame(const std::string& data = "", int64_t timecode = NDIlib_send_timecode_synthesize) {
+        frame_.timecode = timecode;
+        set_data(data);
+    }
+    explicit MetadataFrame(const NDIlib_metadata_frame_t& captured_frame) {
+        frame_ = captured_frame;
+        if (frame_.p_data && frame_.length > 0) {
+            buffer_.assign(frame_.p_data, frame_.p_data + frame_.length);
+            frame_.p_data = buffer_.data();
+        } else {
+            buffer_.clear();
+            frame_.p_data = nullptr;
+            frame_.length = 0;
+        }
+    }
+    void set_data(const std::string& data) {
+        if (data.empty()) {
+            buffer_.clear();
+            frame_.p_data = nullptr;
+            frame_.length = 0;
+        } else {
+            buffer_.assign(data.begin(), data.end());
+            buffer_.push_back('\0');
+            frame_.p_data = buffer_.data();
+            frame_.length = data.length();
+        }
+    }
+    std::string get_data() const {
+        if (buffer_.empty() || frame_.length == 0) {
+            return std::string();
+        }
+        return std::string(buffer_.data(), frame_.length);
+    }
+    const NDIlib_metadata_frame_t* get() const { return &frame_; }
+    NDIlib_metadata_frame_t* get() { return &frame_; }
+    int get_length() const { return frame_.length; }
+    int64_t get_timecode() const { return frame_.timecode; }
+    void set_timecode(int64_t v) { frame_.timecode = v; }
+};
+class Tally {
+private:
+    NDIlib_tally_t tally_;
+public:
+    Tally(bool on_program = false, bool on_preview = false) {
+        tally_.on_program = on_program;
+        tally_.on_preview = on_preview;
+    }
+    const NDIlib_tally_t* get() const { return &tally_; }
+    NDIlib_tally_t* get() { return &tally_; }
+    bool get_on_program() const { return tally_.on_program; }
+    void set_on_program(bool v) { tally_.on_program = v; }
+    bool get_on_preview() const { return tally_.on_preview; }
+    void set_on_preview(bool v) { tally_.on_preview = v; }
+};
+class RecvPerformance {
+private:
+    NDIlib_recv_performance_t perf_;
+public:
+    RecvPerformance(int64_t video_frames = 0, int64_t audio_frames = 0, int64_t metadata_frames = 0) {
+        perf_.video_frames = video_frames;
+        perf_.audio_frames = audio_frames;
+        perf_.metadata_frames = metadata_frames;
+    }
+    explicit RecvPerformance(const NDIlib_recv_performance_t& perf) : perf_(perf) {}
+    const NDIlib_recv_performance_t* get() const { return &perf_; }
+    NDIlib_recv_performance_t* get() { return &perf_; }
+    int64_t get_video_frames() const { return perf_.video_frames; }
+    void set_video_frames(int64_t v) { perf_.video_frames = v; }
+    int64_t get_audio_frames() const { return perf_.audio_frames; }
+    void set_audio_frames(int64_t v) { perf_.audio_frames = v; }
+    int64_t get_metadata_frames() const { return perf_.metadata_frames; }
+    void set_metadata_frames(int64_t v) { perf_.metadata_frames = v; }
+};
+class RecvQueue {
+private:
+    NDIlib_recv_queue_t queue_;
+public:
+    RecvQueue(int video_frames = 0, int audio_frames = 0, int metadata_frames = 0) {
+        queue_.video_frames = video_frames;
+        queue_.audio_frames = audio_frames;
+        queue_.metadata_frames = metadata_frames;
+    }
+    explicit RecvQueue(const NDIlib_recv_queue_t& queue) : queue_(queue) {}
+    const NDIlib_recv_queue_t* get() const { return &queue_; }
+    NDIlib_recv_queue_t* get() { return &queue_; }
+    int get_video_frames() const { return queue_.video_frames; }
+    void set_video_frames(int v) { queue_.video_frames = v; }
+    int get_audio_frames() const { return queue_.audio_frames; }
+    void set_audio_frames(int v) { queue_.audio_frames = v; }
+    int get_metadata_frames() const { return queue_.metadata_frames; }
+    void set_metadata_frames(int v) { queue_.metadata_frames = v; }
+};
+class FindCreate {
+private:
+    NDIlib_find_create_t create_;
+    std::string groups_;
+    std::string extra_ips_;
+public:
+    FindCreate(bool show_local = true,
+               const std::string& groups = "",
+               const std::string& extra_ips = "")
+        : groups_(groups), extra_ips_(extra_ips) {
+        create_.show_local_sources = show_local;
+        create_.p_groups = ndi_utils::string_to_nullable_cstr(groups_);
+        create_.p_extra_ips = ndi_utils::string_to_nullable_cstr(extra_ips_);
+    }
+    const NDIlib_find_create_t* get() const { return &create_; }
+    bool get_show_local_sources() const { return create_.show_local_sources; }
+    void set_show_local_sources(bool v) { create_.show_local_sources = v; }
+    std::string get_groups() const { return groups_; }
+    void set_groups(const std::string& groups) {
+        groups_ = groups;
+        create_.p_groups = ndi_utils::string_to_nullable_cstr(groups_);
+    }
+    std::string get_extra_ips() const { return extra_ips_; }
+    void set_extra_ips(const std::string& extra_ips) {
+        extra_ips_ = extra_ips;
+        create_.p_extra_ips = ndi_utils::string_to_nullable_cstr(extra_ips_);
+    }
+};
+class Finder {
+private:
+    std::unique_ptr<NDIlib_find_instance_type,
+                    decltype(&NDIlib_find_destroy)> instance_;
+public:
+    explicit Finder(const FindCreate& create_settings)
+        : instance_(NDIlib_find_create_v2(create_settings.get()),
+                   &NDIlib_find_destroy) {
+        if (!instance_) {
+            throw NDIException("Failed to create NDI finder");
+        }
+    }
+    Finder(const Finder&) = delete;
+    Finder& operator=(const Finder&) = delete;
+    Finder(Finder&&) = default;
+    Finder& operator=(Finder&&) = default;
+    py::list get_sources() {
+        uint32_t count = 0;
+        const NDIlib_source_t* sources;
+        {
+            py::gil_scoped_release release;
+            sources = NDIlib_find_get_current_sources(instance_.get(), &count);
+        }
+        py::list result;
+        for (uint32_t i = 0; i < count; ++i) {
+            result.append(Source(
+                sources[i].p_ndi_name ? sources[i].p_ndi_name : "",
+                sources[i].p_url_address ? sources[i].p_url_address : ""
+            ));
+        }
+        return result;
+    }
+    void wait_for_sources(uint32_t timeout_ms) {
+        bool result;
+        {
+            py::gil_scoped_release release;
+            result = NDIlib_find_wait_for_sources(instance_.get(), timeout_ms);
+        }
+        check_ndi_result(result, "find_wait_for_sources with timeout " + std::to_string(timeout_ms) + "ms");
+    }
+    bool try_wait_for_sources(uint32_t timeout_ms) {
+        py::gil_scoped_release release;
+        return NDIlib_find_wait_for_sources(instance_.get(), timeout_ms);
+    }
+    py::tuple wait_for_sources_safe(uint32_t timeout_ms) {
+        try {
+            bool result;
+            {
+                py::gil_scoped_release release;
+                result = NDIlib_find_wait_for_sources(instance_.get(), timeout_ms);
+            }
+            if (result) {
+                uint32_t count = 0;
+                const NDIlib_source_t* sources;
+                {
+                    py::gil_scoped_release release;
+                    sources = NDIlib_find_get_current_sources(instance_.get(), &count);
+                }
+                return py::make_tuple(true, "SUCCESS",
+                    py::str("Sources updated, " + std::to_string(count) + " sources available"));
+            } else {
+                return py::make_tuple(false, "TIMEOUT",
+                    py::str("No source changes detected within " + std::to_string(timeout_ms) + "ms"));
+            }
+        } catch (const std::exception& e) {
+            return py::make_tuple(false, "ERROR",
+                py::str("Source discovery error: " + std::string(e.what())));
+        }
+    }
+};
+class SendCreate {
+private:
+    NDIlib_send_create_t create_;
+    std::string ndi_name_;
+    std::string groups_;
+public:
+    SendCreate(const std::string& ndi_name = "",
+               const std::string& groups = "",
+               bool clock_video = true,
+               bool clock_audio = true)
+        : ndi_name_(ndi_name), groups_(groups) {
+        create_.p_ndi_name = ndi_utils::string_to_nullable_cstr(ndi_name_);
+        create_.p_groups = ndi_utils::string_to_nullable_cstr(groups_);
+        create_.clock_video = clock_video;
+        create_.clock_audio = clock_audio;
+    }
+    const NDIlib_send_create_t* get() const { return &create_; }
+    std::string get_ndi_name() const { return ndi_name_; }
+    void set_ndi_name(const std::string& name) {
+        ndi_name_ = name;
+        create_.p_ndi_name = ndi_utils::string_to_nullable_cstr(ndi_name_);
+    }
+    std::string get_groups() const { return groups_; }
+    void set_groups(const std::string& groups) {
+        groups_ = groups;
+        create_.p_groups = ndi_utils::string_to_nullable_cstr(groups_);
+    }
+    bool get_clock_video() const { return create_.clock_video; }
+    void set_clock_video(bool v) { create_.clock_video = v; }
+    bool get_clock_audio() const { return create_.clock_audio; }
+    void set_clock_audio(bool v) { create_.clock_audio = v; }
+};
+class Sender {
+private:
+    std::unique_ptr<NDIlib_send_instance_type,
+                    decltype(&NDIlib_send_destroy)> instance_;
+    NDIlib_metadata_frame_t captured_metadata_;
+public:
+    explicit Sender(const SendCreate& create_settings)
+        : instance_(NDIlib_send_create(create_settings.get()),
+                   &NDIlib_send_destroy),
+          captured_metadata_{} {
+        if (!instance_) {
+            throw NDIException("Failed to create NDI sender");
+        }
+    }
+    ~Sender() {
+        if (captured_metadata_.p_data) {
+            NDIlib_send_free_metadata(instance_.get(), &captured_metadata_);
+        }
+    }
+    Sender(const Sender&) = delete;
+    Sender& operator=(const Sender&) = delete;
+    Sender(Sender&&) = default;
+    Sender& operator=(Sender&&) = default;
+    void send_video_v2(const VideoFrameV2& video_frame) {
+        NDIlib_send_send_video_v2(instance_.get(), video_frame.get());
+    }
+    void send_video_async_v2(const VideoFrameV2& video_frame) {
+        NDIlib_send_send_video_async_v2(instance_.get(), video_frame.get());
+    }
+    void send_audio_v2(const AudioFrameV2& audio_frame) {
+        NDIlib_send_send_audio_v2(instance_.get(), audio_frame.get());
+    }
+    void send_audio_v3(const AudioFrameV3& audio_frame) {
+        NDIlib_send_send_audio_v3(instance_.get(), audio_frame.get());
+    }
+    void send_metadata(const MetadataFrame& metadata) {
+        NDIlib_send_send_metadata(instance_.get(), metadata.get());
+    }
+    std::tuple<NDIlib_frame_type_e, py::object, py::object, py::object>
+    capture(uint32_t timeout_ms) {
+        if (captured_metadata_.p_data) {
+            NDIlib_send_free_metadata(instance_.get(), &captured_metadata_);
+            captured_metadata_ = {};
+        }
+        NDIlib_frame_type_e type;
+        {
+            py::gil_scoped_release release;
+            type = NDIlib_send_capture(instance_.get(), &captured_metadata_, timeout_ms);
+        }
+        py::object video = py::none(), audio = py::none(), metadata = py::none();
+        if (type == NDIlib_frame_type_metadata) {
+            py::dict meta_dict;
+            meta_dict["data"] = py::bytes(captured_metadata_.p_data, captured_metadata_.length);
+            meta_dict["timecode"] = captured_metadata_.timecode;
+            meta_dict["length"] = captured_metadata_.length;
+            metadata = meta_dict;
+            NDIlib_send_free_metadata(instance_.get(), &captured_metadata_);
+        }
+        return std::make_tuple(type, video, audio, metadata);
+    }
+    CaptureResult capture_enhanced(uint32_t timeout_ms) {
+        if (captured_metadata_.p_data) {
+            NDIlib_send_free_metadata(instance_.get(), &captured_metadata_);
+            captured_metadata_ = {};
+        }
+        NDIlib_frame_type_e type;
+        {
+            py::gil_scoped_release release;
+            type = NDIlib_send_capture(instance_.get(), &captured_metadata_, timeout_ms);
+        }
+        CaptureResult result(type, true, ndi_utils::get_frame_type_description(type));
+        switch (type) {
+            case NDIlib_frame_type_metadata: {
+                py::dict meta_dict;
+                meta_dict["data"] = py::bytes(captured_metadata_.p_data, captured_metadata_.length);
+                meta_dict["timecode"] = captured_metadata_.timecode;
+                meta_dict["length"] = captured_metadata_.length;
+                result.metadata = meta_dict;
+                NDIlib_send_free_metadata(instance_.get(), &captured_metadata_);
+                captured_metadata_ = {};
+                break;
+            }
+            case NDIlib_frame_type_none:
+                result.success = false;
+                result.status_message = "Timeout: No metadata available within " + std::to_string(timeout_ms) + "ms";
+                break;
+            case NDIlib_frame_type_error:
+                result.success = false;
+                result.status_message = "Error: NDI capture operation failed";
+                break;
+            default:
+                result.status_message = "Unexpected frame type: " + std::to_string(static_cast<int>(type));
+                break;
+        }
+        return result;
+    }
+    void get_tally(Tally& tally, uint32_t timeout_in_ms) {
+        bool result = NDIlib_send_get_tally(instance_.get(), tally.get(), timeout_in_ms);
+        check_ndi_result(result, "send_get_tally");
+    }
+    bool try_get_tally(Tally& tally, uint32_t timeout_in_ms) {
+        return NDIlib_send_get_tally(instance_.get(), tally.get(), timeout_in_ms);
+    }
+    int get_no_connections(uint32_t timeout_in_ms) {
+        py::gil_scoped_release release;
+        return NDIlib_send_get_no_connections(instance_.get(), timeout_in_ms);
+    }
+    void clear_connection_metadata() {
+        NDIlib_send_clear_connection_metadata(instance_.get());
+    }
+    void add_connection_metadata(const MetadataFrame& metadata) {
+        NDIlib_send_add_connection_metadata(instance_.get(), metadata.get());
+    }
+    void set_failover(const Source& failover_source) {
+        NDIlib_send_set_failover(instance_.get(), failover_source.get());
+    }
+    Source get_source_name() {
+        auto src = NDIlib_send_get_source_name(instance_.get());
+        if (src) {
+            return Source(
+                src->p_ndi_name ? src->p_ndi_name : "",
+                src->p_url_address ? src->p_url_address : ""
+            );
+        }
+        return Source();
+    }
+};
+class RecvCreate {
+private:
+    NDIlib_recv_create_v3_t create_;
+    std::string recv_name_;
+public:
+    RecvCreate(const Source& source = Source(),
+               NDIlib_recv_color_format_e color_format = NDIlib_recv_color_format_UYVY_BGRA,
+               NDIlib_recv_bandwidth_e bandwidth = NDIlib_recv_bandwidth_highest,
+               bool allow_video_fields = true,
+               const std::string& recv_name = "")
+        : recv_name_(recv_name) {
+        create_.source_to_connect_to = *source.get();
+        create_.color_format = color_format;
+        create_.bandwidth = bandwidth;
+        create_.allow_video_fields = allow_video_fields;
+        create_.p_ndi_recv_name = ndi_utils::string_to_nullable_cstr(recv_name_);
+    }
+    const NDIlib_recv_create_v3_t* get() const { return &create_; }
+    Source get_source() const {
+        return Source(
+            create_.source_to_connect_to.p_ndi_name ? create_.source_to_connect_to.p_ndi_name : "",
+            create_.source_to_connect_to.p_url_address ? create_.source_to_connect_to.p_url_address : ""
+        );
+    }
+    void set_source(const Source& source) {
+        create_.source_to_connect_to = *source.get();
+    }
+    NDIlib_recv_color_format_e get_color_format() const { return create_.color_format; }
+    void set_color_format(NDIlib_recv_color_format_e format) { create_.color_format = format; }
+    NDIlib_recv_bandwidth_e get_bandwidth() const { return create_.bandwidth; }
+    void set_bandwidth(NDIlib_recv_bandwidth_e bw) { create_.bandwidth = bw; }
+    bool get_allow_video_fields() const { return create_.allow_video_fields; }
+    void set_allow_video_fields(bool allow) { create_.allow_video_fields = allow; }
+    std::string get_recv_name() const { return recv_name_; }
+    void set_recv_name(const std::string& name) {
+        recv_name_ = name;
+        create_.p_ndi_recv_name = ndi_utils::string_to_nullable_cstr(recv_name_);
+    }
+};
+class Receiver {
+private:
+    std::unique_ptr<NDIlib_recv_instance_type,
+                    decltype(&NDIlib_recv_destroy)> instance_;
+    NDIlib_video_frame_v2_t captured_video_;
+    NDIlib_audio_frame_v2_t captured_audio_v2_;
+    NDIlib_audio_frame_v3_t captured_audio_v3_;
+    NDIlib_metadata_frame_t captured_metadata_;
+    py::capsule video_capsule_;
+    py::capsule audio_v2_capsule_;
+    py::capsule audio_v3_capsule_;
+    py::capsule metadata_capsule_;
+public:
+    explicit Receiver(const RecvCreate& create_settings)
+        : instance_(NDIlib_recv_create_v3(create_settings.get()),
+                   &NDIlib_recv_destroy) {
+        if (!instance_) {
+            throw NDIException("Failed to create NDI receiver");
+        }
+        captured_video_ = {};
+        captured_audio_v2_ = {};
+        captured_audio_v3_ = {};
+        captured_metadata_ = {};
+    }
+    ~Receiver() {
+        cleanup_all_frames();
+    }
+private:
+    void cleanup_all_frames() {
+        if (captured_video_.p_data) {
+            NDIlib_recv_free_video_v2(instance_.get(), &captured_video_);
+            captured_video_ = {};
+        }
+        if (captured_audio_v2_.p_data) {
+            NDIlib_recv_free_audio_v2(instance_.get(), &captured_audio_v2_);
+            captured_audio_v2_ = {};
+        }
+        if (captured_audio_v3_.p_data) {
+            NDIlib_recv_free_audio_v3(instance_.get(), &captured_audio_v3_);
+            captured_audio_v3_ = {};
+        }
+        if (captured_metadata_.p_data) {
+            NDIlib_recv_free_metadata(instance_.get(), &captured_metadata_);
+            captured_metadata_ = {};
+        }
+    }
+    void cleanup_previous_frames() {
+        cleanup_all_frames();
+    }
+    void cleanup_unused_frames(NDIlib_frame_type_e used_type) {
+        if (used_type != NDIlib_frame_type_video && captured_video_.p_data) {
+            NDIlib_recv_free_video_v2(instance_.get(), &captured_video_);
+            captured_video_ = {};
+        }
+        if (used_type != NDIlib_frame_type_audio) {
+            if (captured_audio_v2_.p_data) {
+                NDIlib_recv_free_audio_v2(instance_.get(), &captured_audio_v2_);
+                captured_audio_v2_ = {};
+            }
+            if (captured_audio_v3_.p_data) {
+                NDIlib_recv_free_audio_v3(instance_.get(), &captured_audio_v3_);
+                captured_audio_v3_ = {};
+            }
+        }
+        if (used_type != NDIlib_frame_type_metadata && captured_metadata_.p_data) {
+            NDIlib_recv_free_metadata(instance_.get(), &captured_metadata_);
+            captured_metadata_ = {};
+        }
+    }
+public:
+    Receiver(const Receiver&) = delete;
+    Receiver& operator=(const Receiver&) = delete;
+    Receiver(Receiver&&) = default;
+    Receiver& operator=(Receiver&&) = default;
+    void connect(const Source& source) {
+        py::gil_scoped_release release;
+        NDIlib_recv_connect(instance_.get(), source.get());
+    }
+    void disconnect() {
+        py::gil_scoped_release release;
+        NDIlib_recv_connect(instance_.get(), nullptr);
+    }
+    py::tuple connect_safe(const Source& source, uint32_t retry_count = 3) {
+        for (uint32_t attempt = 0; attempt < retry_count; ++attempt) {
+            try {
+                {
+                    py::gil_scoped_release release;
+                    NDIlib_recv_connect(instance_.get(), source.get());
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                int connections = get_no_connections();
+                if (connections > 0) {
+                    return py::make_tuple(true, "CONNECTED",
+                        py::str("Successfully connected to " + source.get_ndi_name()));
+                }
+                if (attempt < retry_count - 1) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                }
+            } catch (const std::exception& e) {
+                if (attempt == retry_count - 1) {
+                    return py::make_tuple(false, "ERROR",
+                        py::str("Connection failed after " + std::to_string(retry_count) + " attempts: " + e.what()));
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            }
+        }
+        return py::make_tuple(false, "TIMEOUT",
+            py::str("Connection timed out after " + std::to_string(retry_count) + " attempts"));
+    }
+    std::tuple<NDIlib_frame_type_e, py::object, py::object, py::object>
+    capture_v2(uint32_t timeout_in_ms) {
+        cleanup_previous_frames();
+        NDIlib_frame_type_e type;
+        {
+            py::gil_scoped_release release;
+            type = NDIlib_recv_capture_v2(instance_.get(), &captured_video_, &captured_audio_v2_, &captured_metadata_, timeout_in_ms);
+        }
+        py::object video = py::none(), audio = py::none(), metadata = py::none();
+        if (type == NDIlib_frame_type_video) {
+            struct VideoFrameDeleter {
+                NDIlib_recv_instance_t instance;
+                NDIlib_video_frame_v2_t frame;
+                ~VideoFrameDeleter() {
+                    NDIlib_recv_free_video_v2(instance, &frame);
+                }
+            };
+            auto* deleter = new VideoFrameDeleter{instance_.get(), captured_video_};
+            video_capsule_ = py::capsule(deleter, "video_frame", [](void* ptr) {
+                delete static_cast<VideoFrameDeleter*>(ptr);
+            });
+            video = py::cast(CapturedVideoFrame(deleter->frame, video_capsule_));
+            captured_video_ = {};
+        }
+        if (type == NDIlib_frame_type_audio) {
+            struct AudioFrameV2Deleter {
+                NDIlib_recv_instance_t instance;
+                NDIlib_audio_frame_v2_t frame;
+                ~AudioFrameV2Deleter() {
+                    NDIlib_recv_free_audio_v2(instance, &frame);
+                }
+            };
+            auto* deleter = new AudioFrameV2Deleter{instance_.get(), captured_audio_v2_};
+            audio_v2_capsule_ = py::capsule(deleter, "audio_frame_v2", [](void* ptr) {
+                delete static_cast<AudioFrameV2Deleter*>(ptr);
+            });
+            audio = py::cast(CapturedAudioFrameV2(deleter->frame, audio_v2_capsule_));
+            captured_audio_v2_ = {};
+        }
+        if (type == NDIlib_frame_type_metadata) {
+                py::dict meta_dict;
+            meta_dict["data"] = py::bytes(captured_metadata_.p_data, captured_metadata_.length);
+            meta_dict["timecode"] = captured_metadata_.timecode;
+            meta_dict["length"] = captured_metadata_.length;
+            metadata = meta_dict;
+                NDIlib_recv_free_metadata(instance_.get(), &captured_metadata_);
+            captured_metadata_ = {};
+        }
+        cleanup_unused_frames(type);
+        return std::make_tuple(type, video, audio, metadata);
+    }
+    py::tuple capture_v2_safe(uint32_t timeout_in_ms, uint32_t max_retries = 2) {
+        for (uint32_t retry = 0; retry <= max_retries; ++retry) {
+            try {
+                auto result = capture_v2(timeout_in_ms);
+                NDIlib_frame_type_e frame_type = std::get<0>(result);
+                if (frame_type == NDIlib_frame_type_error) {
+                    if (retry < max_retries) {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                        continue;
+                    } else {
+                        return py::make_tuple(false, "FRAME_ERROR",
+                            py::str("Persistent frame error after " + std::to_string(max_retries + 1) + " attempts"),
+                            py::none(), py::none(), py::none());
+                    }
+                }
+                return py::make_tuple(true, "SUCCESS", py::str("Capture successful"),
+                    std::get<1>(result), std::get<2>(result), std::get<3>(result));
+            } catch (const NDIException& e) {
+                if (retry < max_retries) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                    continue;
+                } else {
+                    return py::make_tuple(false, "NDI_ERROR",
+                        py::str("NDI error after " + std::to_string(max_retries + 1) + " attempts: " + e.what()),
+                        py::none(), py::none(), py::none());
+                }
+            } catch (const std::exception& e) {
+                return py::make_tuple(false, "SYSTEM_ERROR",
+                    py::str("System error: " + std::string(e.what())),
+                    py::none(), py::none(), py::none());
+            }
+        }
+        return py::make_tuple(false, "UNKNOWN_ERROR", py::str("Unexpected error in capture"),
+            py::none(), py::none(), py::none());
+    }
+    CaptureResult capture_v2_enhanced(uint32_t timeout_in_ms) {
+        cleanup_previous_frames();
+        NDIlib_frame_type_e type;
+        {
+            py::gil_scoped_release release;
+            type = NDIlib_recv_capture_v2(instance_.get(), &captured_video_,
+                                         &captured_audio_v2_, &captured_metadata_, timeout_in_ms);
+        }
+        CaptureResult result(type, true, ndi_utils::get_frame_type_description(type));
+        switch (type) {
+            case NDIlib_frame_type_video: {
+                struct VideoFrameDeleter {
+                    NDIlib_recv_instance_t instance;
+                    NDIlib_video_frame_v2_t frame;
+                    ~VideoFrameDeleter() {
+                        NDIlib_recv_free_video_v2(instance, &frame);
+                    }
+                };
+                auto* deleter = new VideoFrameDeleter{instance_.get(), captured_video_};
+                auto video_capsule = py::capsule(deleter, "video_frame", [](void* ptr) {
+                    delete static_cast<VideoFrameDeleter*>(ptr);
+                });
+                result.video = py::cast(CapturedVideoFrame(deleter->frame, video_capsule));
+                    captured_video_ = {};
+                break;
+            }
+            case NDIlib_frame_type_audio: {
+                struct AudioFrameV2Deleter {
+                    NDIlib_recv_instance_t instance;
+                    NDIlib_audio_frame_v2_t frame;
+                    ~AudioFrameV2Deleter() {
+                        NDIlib_recv_free_audio_v2(instance, &frame);
+                    }
+                };
+                auto* deleter = new AudioFrameV2Deleter{instance_.get(), captured_audio_v2_};
+                auto audio_v2_capsule = py::capsule(deleter, "audio_frame_v2", [](void* ptr) {
+                    delete static_cast<AudioFrameV2Deleter*>(ptr);
+                });
+                result.audio = py::cast(CapturedAudioFrameV2(deleter->frame, audio_v2_capsule));
+                    captured_audio_v2_ = {};
+                break;
+            }
+            case NDIlib_frame_type_metadata: {
+                py::dict meta_dict;
+                meta_dict["data"] = py::bytes(captured_metadata_.p_data, captured_metadata_.length);
+                meta_dict["timecode"] = captured_metadata_.timecode;
+                meta_dict["length"] = captured_metadata_.length;
+                result.metadata = meta_dict;
+                NDIlib_recv_free_metadata(instance_.get(), &captured_metadata_);
+                captured_metadata_ = {};
+                break;
+            }
+            case NDIlib_frame_type_none:
+                result.success = false;
+                result.status_message = "Timeout: No frame available within " + std::to_string(timeout_in_ms) + "ms";
+                break;
+            case NDIlib_frame_type_error:
+                result.success = false;
+                result.status_message = "Error: NDI capture operation failed";
+                break;
+            case NDIlib_frame_type_status_change:
+                result.status_message = "Status change: Connection status has changed";
+                break;
+            default:
+                result.status_message = "Unexpected frame type: " + std::to_string(static_cast<int>(type));
+                break;
+        }
+            cleanup_unused_frames(type);
+        return result;
+    }
+    std::tuple<NDIlib_frame_type_e, py::object, py::object, py::object>
+    capture_v3(uint32_t timeout_in_ms) {
+        cleanup_previous_frames();
+        NDIlib_frame_type_e type;
+        {
+            py::gil_scoped_release release;
+            type = NDIlib_recv_capture_v3(instance_.get(), &captured_video_, &captured_audio_v3_, &captured_metadata_, timeout_in_ms);
+        }
+        py::object video = py::none(), audio = py::none(), metadata = py::none();
+        if (type == NDIlib_frame_type_video) {
+            struct VideoFrameDeleter {
+                NDIlib_recv_instance_t instance;
+                NDIlib_video_frame_v2_t frame;
+                ~VideoFrameDeleter() {
+                    NDIlib_recv_free_video_v2(instance, &frame);
+                }
+            };
+            auto* deleter = new VideoFrameDeleter{instance_.get(), captured_video_};
+            video_capsule_ = py::capsule(deleter, "video_frame", [](void* ptr) {
+                delete static_cast<VideoFrameDeleter*>(ptr);
+            });
+            video = py::cast(CapturedVideoFrame(deleter->frame, video_capsule_));
+            captured_video_ = {};
+        }
+        if (type == NDIlib_frame_type_audio) {
+            struct AudioFrameV3Deleter {
+                NDIlib_recv_instance_t instance;
+                NDIlib_audio_frame_v3_t frame;
+                ~AudioFrameV3Deleter() {
+                    NDIlib_recv_free_audio_v3(instance, &frame);
+                }
+            };
+            auto* deleter = new AudioFrameV3Deleter{instance_.get(), captured_audio_v3_};
+            audio_v3_capsule_ = py::capsule(deleter, "audio_frame_v3", [](void* ptr) {
+                delete static_cast<AudioFrameV3Deleter*>(ptr);
+            });
+            audio = py::cast(CapturedAudioFrameV3(deleter->frame, audio_v3_capsule_));
+            captured_audio_v3_ = {};
+        }
+        if (type == NDIlib_frame_type_metadata) {
+                py::dict meta_dict;
+            meta_dict["data"] = py::bytes(captured_metadata_.p_data, captured_metadata_.length);
+            meta_dict["timecode"] = captured_metadata_.timecode;
+            meta_dict["length"] = captured_metadata_.length;
+            metadata = meta_dict;
+                NDIlib_recv_free_metadata(instance_.get(), &captured_metadata_);
+            captured_metadata_ = {};
+        }
+        cleanup_unused_frames(type);
+        return std::make_tuple(type, video, audio, metadata);
+    }
+    py::tuple capture_v3_safe(uint32_t timeout_in_ms, uint32_t max_retries = 2) {
+        for (uint32_t retry = 0; retry <= max_retries; ++retry) {
+            try {
+                auto result = capture_v3(timeout_in_ms);
+                NDIlib_frame_type_e frame_type = std::get<0>(result);
+                if (frame_type == NDIlib_frame_type_error) {
+                    if (retry < max_retries) {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                        continue;
+                    } else {
+                        return py::make_tuple(false, "FRAME_ERROR",
+                            py::str("Persistent frame error after " + std::to_string(max_retries + 1) + " attempts"),
+                            py::none(), py::none(), py::none());
+                    }
+                }
+                return py::make_tuple(true, "SUCCESS", py::str("Capture successful"),
+                    std::get<1>(result), std::get<2>(result), std::get<3>(result));
+            } catch (const NDIException& e) {
+                if (retry < max_retries) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                    continue;
+                } else {
+                    return py::make_tuple(false, "NDI_ERROR",
+                        py::str("NDI error after " + std::to_string(max_retries + 1) + " attempts: " + e.what()),
+                        py::none(), py::none(), py::none());
+                }
+            } catch (const std::exception& e) {
+                return py::make_tuple(false, "SYSTEM_ERROR",
+                    py::str("System error: " + std::string(e.what())),
+                    py::none(), py::none(), py::none());
+            }
+        }
+        return py::make_tuple(false, "UNKNOWN_ERROR", py::str("Unexpected error in capture"),
+            py::none(), py::none(), py::none());
+    }
+    void send_metadata(const MetadataFrame& metadata) {
+        bool result = NDIlib_recv_send_metadata(instance_.get(), metadata.get());
+        check_ndi_result(result, "recv_send_metadata");
+    }
+    bool try_send_metadata(const MetadataFrame& metadata) {
+        return NDIlib_recv_send_metadata(instance_.get(), metadata.get());
+    }
+    void set_tally(const Tally& tally) {
+        bool result = NDIlib_recv_set_tally(instance_.get(), tally.get());
+        check_ndi_result(result, "recv_set_tally");
+    }
+    bool try_set_tally(const Tally& tally) {
+        return NDIlib_recv_set_tally(instance_.get(), tally.get());
+    }
+    std::tuple<RecvPerformance, RecvPerformance> get_performance() {
+        NDIlib_recv_performance_t total, dropped;
+        NDIlib_recv_get_performance(instance_.get(), &total, &dropped);
+        return std::make_tuple(RecvPerformance(total), RecvPerformance(dropped));
+    }
+    RecvQueue get_queue() {
+        NDIlib_recv_queue_t total;
+        NDIlib_recv_get_queue(instance_.get(), &total);
+        return RecvQueue(total);
+    }
+    void clear_connection_metadata() {
+        NDIlib_recv_clear_connection_metadata(instance_.get());
+    }
+    void add_connection_metadata(const MetadataFrame& metadata) {
+        NDIlib_recv_add_connection_metadata(instance_.get(), metadata.get());
+    }
+    int get_no_connections() {
+        return NDIlib_recv_get_no_connections(instance_.get());
+    }
+    py::str get_web_control() {
+        const char* str;
+        {
+            py::gil_scoped_release release;
+            str = NDIlib_recv_get_web_control(instance_.get());
+        }
+        if (!str) return py::str("");
+        auto ustr = PyUnicode_DecodeLocale(str, nullptr);
+        return py::reinterpret_steal<py::str>(ustr);
+    }
+    py::tuple get_source_name(uint32_t timeout_in_ms = 0) {
+        const char* source_name = nullptr;
+        bool changed;
+        {
+            py::gil_scoped_release release;
+            changed = NDIlib_recv_get_source_name(instance_.get(), &source_name, timeout_in_ms);
+        }
+        if (changed && source_name) {
+            std::string name(source_name);
+            NDIlib_recv_free_string(instance_.get(), source_name);
+            return py::make_tuple(true, py::str(name));
+        }
+        return py::make_tuple(changed, py::none());
+    }
+};
+class RoutingCreate {
+private:
+    NDIlib_routing_create_t create_;
+    std::string ndi_name_;
+    std::string groups_;
+public:
+    RoutingCreate(const std::string& ndi_name = "",
+                  const std::string& groups = "")
+        : ndi_name_(ndi_name), groups_(groups) {
+        create_.p_ndi_name = ndi_utils::string_to_nullable_cstr(ndi_name_);
+        create_.p_groups = ndi_utils::string_to_nullable_cstr(groups_);
+    }
+    const NDIlib_routing_create_t* get() const { return &create_; }
+    std::string get_ndi_name() const { return ndi_name_; }
+    void set_ndi_name(const std::string& name) {
+        ndi_name_ = name;
+        create_.p_ndi_name = ndi_utils::string_to_nullable_cstr(ndi_name_);
+    }
+    std::string get_groups() const { return groups_; }
+    void set_groups(const std::string& groups) {
+        groups_ = groups;
+        create_.p_groups = ndi_utils::string_to_nullable_cstr(groups_);
+    }
+};
+class Router {
+private:
+    std::unique_ptr<NDIlib_routing_instance_type,
+                    decltype(&NDIlib_routing_destroy)> instance_;
+public:
+    explicit Router(const RoutingCreate& create_settings)
+        : instance_(NDIlib_routing_create(create_settings.get()),
+                   &NDIlib_routing_destroy) {
+        if (!instance_) {
+            throw NDIException("Failed to create NDI router");
+        }
+    }
+    Router(const Router&) = delete;
+    Router& operator=(const Router&) = delete;
+    Router(Router&&) = default;
+    Router& operator=(Router&&) = default;
+    void change(const Source& source) {
+        bool result = NDIlib_routing_change(instance_.get(), source.get());
+        check_ndi_result(result, "routing_change");
+    }
+    bool try_change(const Source& source) {
+        return NDIlib_routing_change(instance_.get(), source.get());
+    }
+    void clear() {
+        NDIlib_routing_clear(instance_.get());
+    }
+    int get_no_connections(uint32_t timeout_in_ms) {
+        py::gil_scoped_release release;
+        return NDIlib_routing_get_no_connections(instance_.get(), timeout_in_ms);
+    }
+    Source get_source_name() {
+        auto src = NDIlib_routing_get_source_name(instance_.get());
+        if (src) {
+            return Source(
+                src->p_ndi_name ? src->p_ndi_name : "",
+                src->p_url_address ? src->p_url_address : ""
+            );
+        }
+        return Source();
+    }
+};
 PYBIND11_MODULE(NDIlib, m) {
-
-  m.doc() = "NDI SDK for Python";
-
-  // Processing.NDI.structs
+  m.doc() = "NDI SDK for Python - High-performance video streaming over IP";
+  if (!NDIlib_initialize()) {
+      throw std::runtime_error("Failed to initialize NDI library");
+  }
+  std::atexit([]() {
+      NDIlib_destroy();
+  });
+  py::register_exception<NDIException>(m, "NDIException");
   py::enum_<NDIlib_frame_type_e>(m, "FrameType", py::arithmetic())
       .value("FRAME_TYPE_NONE", NDIlib_frame_type_none)
       .value("FRAME_TYPE_VIDEO", NDIlib_frame_type_video)
       .value("FRAME_TYPE_AUDIO", NDIlib_frame_type_audio)
       .value("FRAME_TYPE_METADATA", NDIlib_frame_type_metadata)
       .value("FRAME_TYPE_ERROR", NDIlib_frame_type_error)
-      .value("FRANE_TYPE_STATUS_CHANGE", NDIlib_frame_type_status_change)
+      .value("FRAME_TYPE_STATUS_CHANGE", NDIlib_frame_type_status_change)
+      .value("FRAME_TYPE_SOURCE_CHANGE", NDIlib_frame_type_source_change)
       .value("FRAME_TYPE_MAX", NDIlib_frame_type_max)
       .export_values();
-
   py::enum_<NDIlib_FourCC_video_type_e>(m, "FourCCVideoType", py::arithmetic())
       .value("FOURCC_VIDEO_TYPE_UYVY", NDIlib_FourCC_video_type_UYVY)
       .value("FOURCC_VIDEO_TYPE_UYVA", NDIlib_FourCC_video_type_UYVA)
-      .value("FOURCC_VIDEO_TYPE_P216", NDIlib_FourCC_video_type_P216)
-      .value("FOURCC_VIDEO_TYPE_PA16", NDIlib_FourCC_video_type_PA16)
       .value("FOURCC_VIDEO_TYPE_YV12", NDIlib_FourCC_video_type_YV12)
       .value("FOURCC_VIDEO_TYPE_I420", NDIlib_FourCC_video_type_I420)
       .value("FOURCC_VIDEO_TYPE_NV12", NDIlib_FourCC_video_type_NV12)
@@ -32,14 +1379,14 @@ PYBIND11_MODULE(NDIlib, m) {
       .value("FOURCC_VIDEO_TYPE_BGRX", NDIlib_FourCC_video_type_BGRX)
       .value("FOURCC_VIDEO_TYPE_RGBA", NDIlib_FourCC_video_type_RGBA)
       .value("FOURCC_VIDEO_TYPE_RGBX", NDIlib_FourCC_video_type_RGBX)
+      .value("FOURCC_VIDEO_TYPE_P216", NDIlib_FourCC_video_type_P216)
+      .value("FOURCC_VIDEO_TYPE_PA16", NDIlib_FourCC_video_type_PA16)
       .value("FOURCC_VIDEO_TYPE_MAX", NDIlib_FourCC_video_type_max)
       .export_values();
-
   py::enum_<NDIlib_FourCC_audio_type_e>(m, "FourCCAudioType", py::arithmetic())
       .value("FOURCC_AUDIO_TYPE_FLTP", NDIlib_FourCC_audio_type_FLTP)
       .value("FOURCC_AUDIO_TYPE_MAX", NDIlib_FourCC_audio_type_max)
       .export_values();
-
   py::enum_<NDIlib_frame_format_type_e>(m, "FrameFormatType", py::arithmetic())
       .value("FRAME_FORMAT_TYPE_PROGRESSIVE",
              NDIlib_frame_format_type_progressive)
@@ -49,320 +1396,6 @@ PYBIND11_MODULE(NDIlib, m) {
       .value("FRAME_FORMAT_TYPE_FIELD_1", NDIlib_frame_format_type_field_1)
       .value("FRAME_FORMAT_TYPE_MAX", NDIlib_frame_format_type_max)
       .export_values();
-
-  m.attr("SEND_TIMECODE_SYNTHESIZE") = py::int_(INT64_MAX);
-
-  m.attr("RECV_TIMESTAMP_UNDEFINED") = py::int_(INT64_MAX);
-
-  py::class_<NDIlib_source_t>(m, "Source")
-      .def(py::init<const char *, const char *>(),
-           py::arg("p_ndi_name") = nullptr, py::arg("p_url_address") = nullptr)
-      .def_property(
-          "ndi_name",
-          [](const NDIlib_source_t &self) {
-            if (!self.p_ndi_name)
-              return py::str();
-            auto ustr = PyUnicode_DecodeLocale(self.p_ndi_name, nullptr);
-            return py::reinterpret_steal<py::str>(ustr);
-          },
-          [](NDIlib_source_t &self, const std::string &name) {
-            static std::unordered_map<NDIlib_source_t *, std::string> strs;
-            strs[&self] = py::str(name);
-            self.p_ndi_name = strs[&self].c_str();
-          })
-      .def_property(
-          "url_address",
-          [](const NDIlib_source_t &self) {
-            if (!self.p_url_address)
-              return py::str();
-            auto ustr = PyUnicode_DecodeLocale(self.p_url_address, nullptr);
-            return py::reinterpret_steal<py::str>(ustr);
-          },
-          [](NDIlib_source_t &self, const std::string &address) {
-            static std::unordered_map<NDIlib_source_t *, std::string> strs;
-            strs[&self] = py::str(address);
-            self.p_url_address = strs[&self].c_str();
-          });
-
-  py::class_<NDIlib_video_frame_v2_t>(m, "VideoFrameV2")
-      .def(py::init<int, int, NDIlib_FourCC_video_type_e, int, int, float,
-                    NDIlib_frame_format_type_e, int64_t, uint8_t *, int,
-                    const char *, int64_t>(),
-           py::arg("xres") = 0, py::arg("yres") = 0,
-           py::arg("FourCC") = NDIlib_FourCC_video_type_UYVY,
-           py::arg("frame_rate_N") = 30000, py::arg("frame_rate_D") = 1001,
-           py::arg("picture_aspect_ratio") = 0.0f,
-           py::arg("frame_format_type") = NDIlib_frame_format_type_progressive,
-           py::arg("timecode") = 0, py::arg("p_data") = 0,
-           py::arg("line_stride_in_bytes") = 0, py::arg("p_metadata") = nullptr,
-           py::arg("timestamp") = 0)
-      .def_readwrite("xres", &NDIlib_video_frame_v2_t::xres)
-      .def_readwrite("yres", &NDIlib_video_frame_v2_t::yres)
-      .def_readwrite("FourCC", &NDIlib_video_frame_v2_t::FourCC)
-      .def_readwrite("frame_rate_N", &NDIlib_video_frame_v2_t::frame_rate_N)
-      .def_readwrite("frame_rate_D", &NDIlib_video_frame_v2_t::frame_rate_D)
-      .def_readwrite("picture_aspect_ratio",
-                     &NDIlib_video_frame_v2_t::picture_aspect_ratio)
-      .def_readwrite("frame_format_type",
-                     &NDIlib_video_frame_v2_t::frame_format_type)
-      .def_readwrite("timecode", &NDIlib_video_frame_v2_t::timecode)
-      .def_property(
-          "data",
-          [](const NDIlib_video_frame_v2_t &self) {
-            int r = self.yres;
-            int c = self.xres;
-            size_t b1 = self.line_stride_in_bytes;
-            size_t b2 = c > 0 ? b1 / c : 0;
-            size_t b3 = sizeof(uint8_t);
-            auto buffer_info = py::buffer_info(
-                self.p_data, b3, py::format_descriptor<uint8_t>::format(), 3,
-                {r, c, int(b2)}, {b1, b2, b3});
-            return py::array(buffer_info);
-          },
-          [](NDIlib_video_frame_v2_t &self, const py::array_t<uint8_t> &array) {
-            auto info = array.request();
-            self.p_data = static_cast<uint8_t *>(info.ptr);
-            self.picture_aspect_ratio = info.shape[1] / float(info.shape[0]);
-            self.xres = info.shape[1];
-            self.yres = info.shape[0];
-            self.line_stride_in_bytes = info.strides[0];
-          })
-      .def_readwrite("line_stride_in_bytes",
-                     &NDIlib_video_frame_v2_t::line_stride_in_bytes)
-      .def_property(
-          "metadata",
-          [](const NDIlib_video_frame_v2_t &self) {
-            if (!self.p_metadata)
-              return py::str();
-            auto ustr = PyUnicode_DecodeLocale(self.p_metadata, nullptr);
-            return py::reinterpret_steal<py::str>(ustr);
-          },
-          [](NDIlib_video_frame_v2_t &self, const std::string &data) {
-            static std::unordered_map<NDIlib_video_frame_v2_t *, std::string>
-                strs;
-            strs[&self] = py::str(data);
-            self.p_metadata = strs[&self].c_str();
-          })
-      .def_readwrite("timestamp", &NDIlib_video_frame_v2_t::timestamp);
-
-  py::class_<NDIlib_audio_frame_v2_t>(m, "AudioFrameV2")
-      .def(py::init<int, int, int, int64_t, float *, int, const char *,
-                    int64_t>(),
-           py::arg("sample_rate") = 48000, py::arg("no_channels") = 2,
-           py::arg("no_samples") = 0,
-           py::arg("timecode") = NDIlib_send_timecode_synthesize,
-           py::arg("p_data") = 0, py::arg("channel_stride_in_bytes") = 0,
-           py::arg("p_metadata") = nullptr, py::arg("timestamp") = 0)
-      .def_readwrite("sample_rate", &NDIlib_audio_frame_v2_t::sample_rate)
-      .def_readwrite("no_channels", &NDIlib_audio_frame_v2_t::no_channels)
-      .def_readwrite("no_samples", &NDIlib_audio_frame_v2_t::no_samples)
-      .def_readwrite("timecode", &NDIlib_audio_frame_v2_t::timecode)
-      .def_property(
-          "data",
-          [](const NDIlib_audio_frame_v2_t &self) {
-            size_t col = self.no_samples;
-            size_t row = self.no_channels;
-            size_t size = sizeof(float);
-            auto buffer_info = py::buffer_info(
-                self.p_data, size, py::format_descriptor<float>::format(), 2,
-                {row, col}, {col * size, size});
-            return py::array(buffer_info);
-          },
-          [](NDIlib_audio_frame_v2_t &self, py::array_t<float> &array) {
-            auto info = array.request();
-            self.p_data = static_cast<float *>(info.ptr);
-            self.no_channels = info.shape[0];
-            self.no_samples = info.shape[1];
-            self.channel_stride_in_bytes = info.strides[0];
-          })
-      .def_readwrite("channel_stride_in_bytes",
-                     &NDIlib_audio_frame_v2_t::channel_stride_in_bytes)
-      .def_property(
-          "metadata",
-          [](const NDIlib_audio_frame_v2_t &self) {
-            if (!self.p_metadata)
-              return py::str();
-            auto ustr = PyUnicode_DecodeLocale(self.p_metadata, nullptr);
-            return py::reinterpret_steal<py::str>(ustr);
-          },
-          [](NDIlib_audio_frame_v2_t &self, const std::string &data) {
-            static std::unordered_map<NDIlib_audio_frame_v2_t *, std::string>
-                strs;
-            strs[&self] = py::str(data);
-            self.p_metadata = strs[&self].c_str();
-          })
-      .def_readwrite("timestamp", &NDIlib_audio_frame_v2_t::timestamp);
-
-  py::class_<NDIlib_audio_frame_v3_t>(m, "AudioFrameV3")
-      .def(py::init<int, int, int, int64_t, NDIlib_FourCC_audio_type_e,
-                    uint8_t *, int, const char *, int64_t>(),
-           py::arg("sample_rate") = 48000, py::arg("no_channels") = 2,
-           py::arg("no_samples") = 0,
-           py::arg("timecode") = NDIlib_send_timecode_synthesize,
-           py::arg("FourCC") = NDIlib_FourCC_audio_type_FLTP,
-           py::arg("p_data") = 0, py::arg("channel_stride_in_bytes") = 0,
-           py::arg("p_metadata") = nullptr, py::arg("timestamp") = 0)
-      .def_readwrite("sample_rate", &NDIlib_audio_frame_v3_t::sample_rate)
-      .def_readwrite("no_channels", &NDIlib_audio_frame_v3_t::no_channels)
-      .def_readwrite("no_samples", &NDIlib_audio_frame_v3_t::no_samples)
-      .def_readwrite("timecode", &NDIlib_audio_frame_v3_t::timecode)
-      .def_readwrite("FourCC", &NDIlib_audio_frame_v3_t::FourCC)
-      .def_property(
-          "data",
-          [](const NDIlib_audio_frame_v3_t &self) {
-            size_t col = self.no_samples;
-            size_t row = self.no_channels;
-            size_t size = sizeof(uint8_t);
-            auto buffer_info = py::buffer_info(
-                self.p_data, size, py::format_descriptor<uint8_t>::format(), 2,
-                {row, col}, {col * size * 4, size});
-            return py::array(buffer_info);
-          },
-          [](NDIlib_audio_frame_v3_t &self, py::array_t<uint8_t> &array) {
-            auto info = array.request();
-            self.p_data = static_cast<uint8_t *>(info.ptr);
-            self.no_channels = info.shape[0];
-            self.no_samples = info.shape[1];
-            self.channel_stride_in_bytes = info.strides[0];
-          })
-      .def_readwrite("channel_stride_in_bytes",
-                     &NDIlib_audio_frame_v3_t::channel_stride_in_bytes)
-      .def_property(
-          "metadata",
-          [](const NDIlib_audio_frame_v3_t &self) {
-            if (!self.p_metadata)
-              return py::str();
-            auto ustr = PyUnicode_DecodeLocale(self.p_metadata, nullptr);
-            return py::reinterpret_steal<py::str>(ustr);
-          },
-          [](NDIlib_audio_frame_v3_t &self, const std::string &data) {
-            static std::unordered_map<NDIlib_audio_frame_v3_t *, std::string>
-                strs;
-            strs[&self] = py::str(data);
-            self.p_metadata = strs[&self].c_str();
-          })
-      .def_readwrite("timestamp", &NDIlib_audio_frame_v3_t::timestamp);
-
-  py::class_<NDIlib_metadata_frame_t>(m, "MetadataFrame")
-      .def(py::init<int, int64_t, char *>(), py::arg("length") = 0,
-           py::arg("timecode") = NDIlib_send_timecode_synthesize,
-           py::arg("p_data") = nullptr)
-      .def_readwrite("length", &NDIlib_metadata_frame_t::length)
-      .def_readwrite("timecode", &NDIlib_metadata_frame_t::timecode)
-      .def_property(
-          "data",
-          [](const NDIlib_metadata_frame_t &self) {
-            if (!self.p_data)
-              return py::str();
-            auto ustr = PyUnicode_DecodeLocale(self.p_data, nullptr);
-            return py::reinterpret_steal<py::str>(ustr);
-          },
-          [](NDIlib_metadata_frame_t &self, const std::string &data) {
-            static std::unordered_map<NDIlib_metadata_frame_t *, std::string>
-                strs;
-            strs[&self] = py::str(data);
-            self.p_data = &strs[&self][0];
-          });
-
-  py::class_<NDIlib_tally_t>(m, "Tally")
-      .def(py::init<bool, bool>(), py::arg("on_program") = false,
-           py::arg("on_preview") = false)
-      .def_readwrite("on_program", &NDIlib_tally_t::on_program)
-      .def_readwrite("on_preview", &NDIlib_tally_t::on_preview);
-
-  // Processing.NDI.Lib
-  m.def("initialize", &NDIlib_initialize);
-
-  m.def("destroy", &NDIlib_destroy);
-
-  m.def("version", &NDIlib_version);
-
-  m.def("is_supported_CPU", &NDIlib_is_supported_CPU);
-
-  // Processing.NDI.Find
-  py::class_<NDIlib_find_create_t>(m, "FindCreate")
-      .def(py::init<bool, const char *, const char *>(),
-           py::arg("show_local_sources") = true, py::arg("p_groups") = nullptr,
-           py::arg("p_extra_ips") = nullptr)
-      .def_readwrite("show_local_sources",
-                     &NDIlib_find_create_t::show_local_sources)
-      .def_property(
-          "groups",
-          [](const NDIlib_find_create_t &self) {
-            if (!self.p_groups)
-              return py::str();
-            auto ustr = PyUnicode_DecodeLocale(self.p_groups, nullptr);
-            return py::reinterpret_steal<py::str>(ustr);
-          },
-          [](NDIlib_find_create_t &self, const std::string &groups) {
-            static std::unordered_map<NDIlib_find_create_t *, std::string> strs;
-            strs[&self] = py::str(groups);
-            self.p_groups = strs[&self].c_str();
-          })
-      .def_property(
-          "extra_ips",
-          [](const NDIlib_find_create_t &self) {
-            if (!self.p_extra_ips)
-              return py::str();
-            auto ustr = PyUnicode_DecodeLocale(self.p_extra_ips, nullptr);
-            return py::reinterpret_steal<py::str>(ustr);
-          },
-          [](NDIlib_find_create_t &self, const std::string &extra_ips) {
-            static std::unordered_map<NDIlib_find_create_t *, std::string> strs;
-            strs[&self] = py::str(extra_ips);
-            self.p_extra_ips = strs[&self].c_str();
-          });
-
-  m.def(
-      "find_create_v2",
-      [](const NDIlib_find_create_t *p_create_settings) {
-        auto p_instance = NDIlib_find_create_v2(p_create_settings);
-        return py::capsule(p_instance, "FindInstance");
-      },
-      py::arg("create_settings") = nullptr);
-
-  m.def(
-      "find_destroy",
-      [](py::capsule instance) {
-        auto p_instance =
-            static_cast<NDIlib_find_instance_type *>(instance.get_pointer());
-        NDIlib_find_destroy(p_instance);
-      },
-      py::arg("instance"));
-
-  m.def(
-      "find_get_current_sources",
-      [](py::capsule instance) {
-        auto p_instance =
-            static_cast<NDIlib_find_instance_type *>(instance.get_pointer());
-        uint32_t count = 0;
-        auto sources = NDIlib_find_get_current_sources(p_instance, &count);
-        py::list out;
-        for (uint32_t i = 0; i < count; ++i)
-          out.append(sources + i);
-        return out;
-      },
-      py::arg("instance"));
-
-  m.def(
-      "find_wait_for_sources",
-      [](py::capsule instance, uint32_t timeout_in_ms) {
-        auto p_instance =
-            static_cast<NDIlib_find_instance_type *>(instance.get_pointer());
-        return NDIlib_find_wait_for_sources(p_instance, timeout_in_ms);
-      },
-      py::arg("instance"), py::arg("timeout_in_ms"));
-
-  // Processing.NDI.Recv
-  py::enum_<NDIlib_recv_bandwidth_e>(m, "RecvBandwidth", py::arithmetic())
-      .value("RECV_BANDWIDTH_METADATA_ONLY",
-             NDIlib_recv_bandwidth_metadata_only)
-      .value("RECV_BANDWIDTH_AUDIO_ONLY", NDIlib_recv_bandwidth_audio_only)
-      .value("RECV_BANDWIDTH_LOWEST", NDIlib_recv_bandwidth_lowest)
-      .value("RECV_BANDWIDTH_HIGHEST", NDIlib_recv_bandwidth_highest)
-      .value("RECV_BANDWIDTH_MAX", NDIlib_recv_bandwidth_max)
-      .export_values();
-
   py::enum_<NDIlib_recv_color_format_e>(m, "RecvColorFormat", py::arithmetic())
       .value("RECV_COLOR_FORMAT_BGRX_BGRA", NDIlib_recv_color_format_BGRX_BGRA)
       .value("RECV_COLOR_FORMAT_UYVY_BGRA", NDIlib_recv_color_format_UYVY_BGRA)
@@ -370,1016 +1403,290 @@ PYBIND11_MODULE(NDIlib, m) {
       .value("RECV_COLOR_FORMAT_UYVY_RGBA", NDIlib_recv_color_format_UYVY_RGBA)
       .value("RECV_COLOR_FORMAT_FASTEST", NDIlib_recv_color_format_fastest)
       .value("RECV_COLOR_FORMAT_BEST", NDIlib_recv_color_format_best)
-      .value("RECV_COLOR_FORMAT_E_BGRX_BGRA",
-             NDIlib_recv_color_format_e_BGRX_BGRA)
-      .value("RECV_COLOR_FORMAT_E_UYVY_BGRA",
-             NDIlib_recv_color_format_e_UYVY_BGRA)
-      .value("RECV_COLOR_FORMAT_E_RGBX_RGBA",
-             NDIlib_recv_color_format_e_RGBX_RGBA)
-      .value("RECV_COLOR_FORMAT_E_UYVY_RGBA",
-             NDIlib_recv_color_format_e_UYVY_RGBA)
-#ifdef _WIN32
-      .value("RECV_COLOR_FORMAT_BGRX_BGRA_FLIPPED",
-             NDIlib_recv_color_format_BGRX_BGRA_flipped)
-#endif
-      .value("RECV_COLOR_FORMAT_MAX", NDIlib_recv_color_format_max)
       .export_values();
-
-  py::class_<NDIlib_recv_create_v3_t>(m, "RecvCreateV3")
-      .def(py::init<const NDIlib_source_t, NDIlib_recv_color_format_e,
-                    NDIlib_recv_bandwidth_e, bool, const char *>(),
-           py::arg("source_to_connect_to") = NDIlib_source_t(),
+  py::enum_<NDIlib_recv_bandwidth_e>(m, "RecvBandwidth", py::arithmetic())
+      .value("RECV_BANDWIDTH_METADATA_ONLY", NDIlib_recv_bandwidth_metadata_only)
+      .value("RECV_BANDWIDTH_AUDIO_ONLY", NDIlib_recv_bandwidth_audio_only)
+      .value("RECV_BANDWIDTH_LOWEST", NDIlib_recv_bandwidth_lowest)
+      .value("RECV_BANDWIDTH_HIGHEST", NDIlib_recv_bandwidth_highest)
+      .export_values();
+  m.attr("SEND_TIMECODE_SYNTHESIZE") = py::int_(INT64_MAX);
+  m.attr("RECV_TIMESTAMP_UNDEFINED") = py::int_(INT64_MAX);
+  m.def("initialize", &NDIlib_initialize, 
+        "Initialize the NDI library. Must be called before any other NDI functions.");
+  m.def("destroy", &NDIlib_destroy,
+        "Destroy the NDI library and cleanup resources. Call when finished with NDI.");
+  m.def("version", &NDIlib_version,
+        "Get the NDI SDK version string.");
+  m.def("get_runtime_version", []() {
+    const NDIlib_v6* p_NDILib = NDIlib_v6_load();
+    if (p_NDILib && p_NDILib->version) {
+        return py::str(p_NDILib->version());
+    }
+    return py::str("Unknown");
+  }, "Get the runtime version of the currently loaded NDI library.");
+  m.def("is_supported_CPU", &NDIlib_is_supported_CPU,
+        "Check if the current CPU supports NDI operations (requires SSE4.1).");
+  py::class_<Source>(m, "Source")
+      .def(py::init<const std::string&, const std::string&>(),
+           py::arg("ndi_name") = "",
+           py::arg("url_address") = "")
+      .def_property("ndi_name",
+                    &Source::get_ndi_name,
+                    &Source::set_ndi_name)
+      .def_property("url_address",
+                    &Source::get_url_address,
+                    &Source::set_url_address);
+  py::class_<VideoFrameV2>(m, "VideoFrameV2")
+      .def(py::init<int, int, NDIlib_FourCC_video_type_e,
+                    int, int, float, NDIlib_frame_format_type_e, int64_t, int64_t>(),
+           py::arg("xres") = 0, py::arg("yres") = 0,
+           py::arg("fourcc") = NDIlib_FourCC_video_type_UYVY,
+           py::arg("frame_rate_N") = 30000,
+           py::arg("frame_rate_D") = 1001,
+           py::arg("aspect_ratio") = 0.0f,
+           py::arg("format") = NDIlib_frame_format_type_progressive,
+           py::arg("timecode") = 0,
+           py::arg("timestamp") = 0)
+      .def_property("data", &VideoFrameV2::get_data, &VideoFrameV2::set_data)
+      .def_property("metadata", &VideoFrameV2::get_metadata, &VideoFrameV2::set_metadata)
+      .def_property("xres", &VideoFrameV2::get_xres, &VideoFrameV2::set_xres)
+      .def_property("yres", &VideoFrameV2::get_yres, &VideoFrameV2::set_yres)
+      .def_property("fourcc", &VideoFrameV2::get_fourcc, &VideoFrameV2::set_fourcc)
+      .def_property("frame_rate_N", &VideoFrameV2::get_frame_rate_N, &VideoFrameV2::set_frame_rate_N)
+      .def_property("frame_rate_D", &VideoFrameV2::get_frame_rate_D, &VideoFrameV2::set_frame_rate_D)
+      .def_property("picture_aspect_ratio", &VideoFrameV2::get_picture_aspect_ratio, &VideoFrameV2::set_picture_aspect_ratio)
+      .def_property("frame_format_type", &VideoFrameV2::get_frame_format_type, &VideoFrameV2::set_frame_format_type)
+      .def_property("timecode", &VideoFrameV2::get_timecode, &VideoFrameV2::set_timecode)
+      .def_property("line_stride_in_bytes", &VideoFrameV2::get_line_stride_in_bytes, &VideoFrameV2::set_line_stride_in_bytes)
+      .def_property("timestamp", &VideoFrameV2::get_timestamp, &VideoFrameV2::set_timestamp);
+  py::class_<FindCreate>(m, "FindCreate")
+      .def(py::init<bool, const std::string&, const std::string&>(),
+           py::arg("show_local") = true,
+           py::arg("groups") = "",
+           py::arg("extra_ips") = "")
+      .def_property("show_local_sources", &FindCreate::get_show_local_sources, &FindCreate::set_show_local_sources)
+      .def_property("groups", &FindCreate::get_groups, &FindCreate::set_groups)
+      .def_property("extra_ips", &FindCreate::get_extra_ips, &FindCreate::set_extra_ips);
+  py::class_<Finder>(m, "Finder")
+      .def(py::init<const FindCreate&>())
+      .def("get_sources", &Finder::get_sources)
+      .def("wait_for_sources", &Finder::wait_for_sources,
+           py::arg("timeout_ms"))
+      .def("try_wait_for_sources", &Finder::try_wait_for_sources,
+           py::arg("timeout_ms"))
+      .def("wait_for_sources_safe", &Finder::wait_for_sources_safe,
+           py::arg("timeout_ms"));
+  py::class_<SendCreate>(m, "SendCreate")
+      .def(py::init<const std::string&, const std::string&, bool, bool>(),
+           py::arg("ndi_name") = "",
+           py::arg("groups") = "",
+           py::arg("clock_video") = true,
+           py::arg("clock_audio") = true)
+      .def_property("ndi_name", &SendCreate::get_ndi_name, &SendCreate::set_ndi_name)
+      .def_property("groups", &SendCreate::get_groups, &SendCreate::set_groups)
+      .def_property("clock_video", &SendCreate::get_clock_video, &SendCreate::set_clock_video)
+      .def_property("clock_audio", &SendCreate::get_clock_audio, &SendCreate::set_clock_audio);
+  py::class_<Sender>(m, "Sender")
+      .def(py::init<const SendCreate&>())
+      .def("send_video_v2", &Sender::send_video_v2, py::arg("video_frame"))
+      .def("send_video_async_v2", &Sender::send_video_async_v2, py::arg("video_frame"))
+      .def("send_audio_v2", &Sender::send_audio_v2, py::arg("audio_frame"))
+      .def("send_audio_v3", &Sender::send_audio_v3, py::arg("audio_frame"))
+      .def("send_metadata", &Sender::send_metadata, py::arg("metadata"))
+      .def("capture", &Sender::capture, py::arg("timeout_in_ms") = 5000)
+      .def("capture_enhanced", &Sender::capture_enhanced, py::arg("timeout_in_ms") = 5000,
+           "Enhanced capture method returning CaptureResult with better type safety")
+      .def("get_tally", &Sender::get_tally, py::arg("tally"), py::arg("timeout_in_ms"))
+      .def("try_get_tally", &Sender::try_get_tally, py::arg("tally"), py::arg("timeout_in_ms"))
+      .def("get_no_connections", &Sender::get_no_connections, py::arg("timeout_in_ms"))
+      .def("clear_connection_metadata", &Sender::clear_connection_metadata)
+      .def("add_connection_metadata", &Sender::add_connection_metadata, py::arg("metadata"))
+      .def("set_failover", &Sender::set_failover, py::arg("failover_source"))
+      .def("get_source_name", &Sender::get_source_name);
+  py::class_<RoutingCreate>(m, "RoutingCreate")
+      .def(py::init<const std::string&, const std::string&>(),
+           py::arg("ndi_name") = "",
+           py::arg("groups") = "")
+      .def_property("ndi_name",
+                    &RoutingCreate::get_ndi_name,
+                    &RoutingCreate::set_ndi_name)
+      .def_property("groups",
+                    &RoutingCreate::get_groups,
+                    &RoutingCreate::set_groups);
+  py::class_<Router>(m, "Router")
+      .def(py::init<const RoutingCreate&>())
+      .def("change", &Router::change, py::arg("source"))
+      .def("try_change", &Router::try_change, py::arg("source"))
+      .def("clear", &Router::clear)
+      .def("get_no_connections", &Router::get_no_connections,
+           py::arg("timeout_in_ms") = 0)
+      .def("get_source_name", &Router::get_source_name);
+  py::class_<RecvCreate>(m, "RecvCreate")
+      .def(py::init<const Source&, NDIlib_recv_color_format_e, NDIlib_recv_bandwidth_e, bool, const std::string&>(),
+           py::arg("source") = Source(),
            py::arg("color_format") = NDIlib_recv_color_format_UYVY_BGRA,
            py::arg("bandwidth") = NDIlib_recv_bandwidth_highest,
            py::arg("allow_video_fields") = true,
-           py::arg("p_ndi_recv_name") = nullptr)
-      .def_readwrite("source_to_connect_to",
-                     &NDIlib_recv_create_v3_t::source_to_connect_to)
-      .def_readwrite("color_format", &NDIlib_recv_create_v3_t::color_format)
-      .def_readwrite("bandwidth", &NDIlib_recv_create_v3_t::bandwidth)
-      .def_readwrite("allow_video_fields",
-                     &NDIlib_recv_create_v3_t::allow_video_fields)
-      .def_property(
-          "ndi_recv_name",
-          [](const NDIlib_recv_create_v3_t &self) {
-            if (!self.p_ndi_recv_name)
-              return py::str();
-            auto ustr = PyUnicode_DecodeLocale(self.p_ndi_recv_name, nullptr);
-            return py::reinterpret_steal<py::str>(ustr);
-          },
-          [](NDIlib_recv_create_v3_t &self, const std::string &ndi_recv_name) {
-            static std::unordered_map<NDIlib_recv_create_v3_t *, std::string>
-                strs;
-            strs[&self] = py::str(ndi_recv_name);
-            self.p_ndi_recv_name = strs[&self].c_str();
-          });
-
-  py::class_<NDIlib_recv_performance_t>(m, "RecvPerformance")
-      .def(py::init<>())
-      .def_readwrite("video_frames", &NDIlib_recv_performance_t::video_frames)
-      .def_readwrite("audio_frames", &NDIlib_recv_performance_t::audio_frames)
-      .def_readwrite("metadata_frames",
-                     &NDIlib_recv_performance_t::metadata_frames);
-
-  py::class_<NDIlib_recv_queue_t>(m, "RecvQueue")
-      .def(py::init<>())
-      .def_readwrite("video_frames", &NDIlib_recv_queue_t::video_frames)
-      .def_readwrite("audio_frames", &NDIlib_recv_queue_t::audio_frames)
-      .def_readwrite("metadata_frames", &NDIlib_recv_queue_t::metadata_frames);
-
-  m.def(
-      "recv_create_v3",
-      [](const NDIlib_recv_create_v3_t *p_create_settings) {
-        auto p_instance = NDIlib_recv_create_v3(p_create_settings);
-        return py::capsule(p_instance, "RecvInstance");
-      },
-      py::arg("create_settings") = nullptr);
-
-  m.def(
-      "recv_destroy",
-      [](py::capsule instance) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        NDIlib_recv_destroy(p_instance);
-      },
-      py::arg("instance"));
-
-  m.def(
-      "recv_connect",
-      [](py::capsule instance, const NDIlib_source_t *p_src) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        NDIlib_recv_connect(p_instance, p_src);
-      },
-      py::arg("instance"), py::arg("source") = nullptr);
-
-  m.def(
-      "recv_capture_v2",
-      [](py::capsule instance, uint32_t timeout_in_ms) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        NDIlib_video_frame_v2_t video_frame;
-        NDIlib_audio_frame_v2_t audio_frame;
-        NDIlib_metadata_frame_t metadata_frame;
-        auto type =
-            NDIlib_recv_capture_v2(p_instance, &video_frame, &audio_frame,
-                                   &metadata_frame, timeout_in_ms);
-        return std::tuple<NDIlib_frame_type_e, NDIlib_video_frame_v2_t,
-                          NDIlib_audio_frame_v2_t, NDIlib_metadata_frame_t>(
-            type, video_frame, audio_frame, metadata_frame);
-      },
-      py::arg("instance"), py::arg("timeout_in_ms"));
-
-  m.def(
-      "recv_capture_v3",
-      [](py::capsule instance, uint32_t timeout_in_ms) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        NDIlib_video_frame_v2_t video_frame;
-        NDIlib_audio_frame_v3_t audio_frame;
-        NDIlib_metadata_frame_t metadata_frame;
-        auto type =
-            NDIlib_recv_capture_v3(p_instance, &video_frame, &audio_frame,
-                                   &metadata_frame, timeout_in_ms);
-        return std::tuple<NDIlib_frame_type_e, NDIlib_video_frame_v2_t,
-                          NDIlib_audio_frame_v3_t, NDIlib_metadata_frame_t>(
-            type, video_frame, audio_frame, metadata_frame);
-      },
-      py::arg("instance"), py::arg("timeout_in_ms"));
-
-  m.def(
-      "recv_free_video_v2",
-      [](py::capsule instance, const NDIlib_video_frame_v2_t *p_video_data) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        NDIlib_recv_free_video_v2(p_instance, p_video_data);
-      },
-      py::arg("instance"), py::arg("video_data") = nullptr);
-
-  m.def(
-      "recv_free_audio_v2",
-      [](py::capsule instance, const NDIlib_audio_frame_v2_t *p_audio_data) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        NDIlib_recv_free_audio_v2(p_instance, p_audio_data);
-      },
-      py::arg("instance"), py::arg("audio_data") = nullptr);
-
-  m.def(
-      "recv_free_audio_v3",
-      [](py::capsule instance, const NDIlib_audio_frame_v3_t *p_audio_data) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        NDIlib_recv_free_audio_v3(p_instance, p_audio_data);
-      },
-      py::arg("instance"), py::arg("audio_data") = nullptr);
-
-  m.def(
-      "recv_free_metadata",
-      [](py::capsule instance, const NDIlib_metadata_frame_t *p_metadata) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        NDIlib_recv_free_metadata(p_instance, p_metadata);
-      },
-      py::arg("instance"), py::arg("metadata") = nullptr);
-
-  m.def(
-      "recv_free_string",
-      [](py::capsule instance, const char *p_string) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        NDIlib_recv_free_string(p_instance, p_string);
-      },
-      py::arg("instance"), py::arg("string") = nullptr);
-
-  m.def(
-      "recv_send_metadata",
-      [](py::capsule instance, const NDIlib_metadata_frame_t *p_metadata) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        return NDIlib_recv_send_metadata(p_instance, p_metadata);
-      },
-      py::arg("instance"), py::arg("metadata_frame"));
-
-  m.def(
-      "recv_set_tally",
-      [](py::capsule instance, const NDIlib_tally_t *p_tally) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        return NDIlib_recv_set_tally(p_instance, p_tally);
-      },
-      py::arg("instance"), py::arg("tally"));
-
-  m.def(
-      "recv_get_performance",
-      [](py::capsule instance) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        NDIlib_recv_performance_t total;
-        NDIlib_recv_performance_t dropped;
-        NDIlib_recv_get_performance(p_instance, &total, &dropped);
-        return std::tuple<NDIlib_recv_performance_t, NDIlib_recv_performance_t>(
-            total, dropped);
-      },
-      py::arg("instance"));
-
-  m.def(
-      "recv_get_queue",
-      [](py::capsule instance) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        NDIlib_recv_queue_t total;
-        NDIlib_recv_get_queue(p_instance, &total);
-        return total;
-      },
-      py::arg("instance"));
-
-  m.def(
-      "recv_clear_connection_metadata",
-      [](py::capsule instance) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        NDIlib_recv_clear_connection_metadata(p_instance);
-      },
-      py::arg("instance"));
-
-  m.def(
-      "recv_add_connection_metadata",
-      [](py::capsule instance, const NDIlib_metadata_frame_t *p_metadata) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        NDIlib_recv_add_connection_metadata(p_instance, p_metadata);
-      },
-      py::arg("instance"), py::arg("metadata"));
-
-  m.def(
-      "recv_get_no_connections",
-      [](py::capsule instance) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        return NDIlib_recv_get_no_connections(p_instance);
-      },
-      py::arg("instance"));
-
-  m.def(
-      "recv_get_web_control",
-      [](py::capsule instance) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        auto str = NDIlib_recv_get_web_control(p_instance);
-        auto ustr = PyUnicode_DecodeLocale(str, nullptr);
-        return py::reinterpret_steal<py::str>(ustr);
-      },
-      py::arg("instance"));
-
-  // Processing.NDI.Recv.ex
-  m.def(
-      "recv_ptz_is_supported",
-      [](py::capsule instance) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        return NDIlib_recv_ptz_is_supported(p_instance);
-      },
-      py::arg("instance"));
-
-  m.def(
-      "recv_recording_is_supported",
-      [](py::capsule instance) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        return NDIlib_recv_recording_is_supported(p_instance);
-      },
-      py::arg("instance"));
-
-  m.def(
-      "recv_ptz_zoom",
-      [](py::capsule instance, const float zoom_value) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        return NDIlib_recv_ptz_zoom(p_instance, zoom_value);
-      },
-      py::arg("instance"), py::arg("zoom_value"));
-
-  m.def(
-      "recv_ptz_zoom_speed",
-      [](py::capsule instance, const float zoom_speed) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        return NDIlib_recv_ptz_zoom_speed(p_instance, zoom_speed);
-      },
-      py::arg("instance"), py::arg("zoom_speed"));
-
-  m.def(
-      "recv_ptz_pan_tilt",
-      [](py::capsule instance, const float pan_value, const float tilt_value) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        return NDIlib_recv_ptz_pan_tilt(p_instance, pan_value, tilt_value);
-      },
-      py::arg("instance"), py::arg("pan_value"), py::arg("tilt_value"));
-
-  m.def(
-      "recv_ptz_pan_tilt_speed",
-      [](py::capsule instance, const float pan_speed, const float tilt_speed) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        return NDIlib_recv_ptz_pan_tilt_speed(p_instance, pan_speed,
-                                              tilt_speed);
-      },
-      py::arg("instance"), py::arg("pan_speed"), py::arg("tilt_speed"));
-
-  m.def(
-      "recv_ptz_store_preset",
-      [](py::capsule instance, const int preset_no) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        return NDIlib_recv_ptz_store_preset(p_instance, preset_no);
-      },
-      py::arg("instance"), py::arg("preset_no"));
-
-  m.def(
-      "recv_ptz_recall_preset",
-      [](py::capsule instance, const int preset_no, const float speed) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        return NDIlib_recv_ptz_recall_preset(p_instance, preset_no, speed);
-      },
-      py::arg("instance"), py::arg("preset_no"), py::arg("speed"));
-
-  m.def(
-      "recv_ptz_auto_focus",
-      [](py::capsule instance) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        return NDIlib_recv_ptz_auto_focus(p_instance);
-      },
-      py::arg("instance"));
-
-  m.def(
-      "recv_ptz_focus",
-      [](py::capsule instance, const float focus_value) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        return NDIlib_recv_ptz_focus(p_instance, focus_value);
-      },
-      py::arg("instance"), py::arg("focus_value"));
-
-  m.def(
-      "recv_ptz_focus_speed",
-      [](py::capsule instance, const float focus_speed) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        return NDIlib_recv_ptz_focus_speed(p_instance, focus_speed);
-      },
-      py::arg("instance"), py::arg("focus_speed"));
-
-  m.def(
-      "recv_ptz_white_balance_auto",
-      [](py::capsule instance) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        return NDIlib_recv_ptz_white_balance_auto(p_instance);
-      },
-      py::arg("instance"));
-
-  m.def(
-      "recv_ptz_white_balance_indoor",
-      [](py::capsule instance) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        return NDIlib_recv_ptz_white_balance_indoor(p_instance);
-      },
-      py::arg("instance"));
-
-  m.def(
-      "recv_ptz_white_balance_outdoor",
-      [](py::capsule instance) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        return NDIlib_recv_ptz_white_balance_outdoor(p_instance);
-      },
-      py::arg("instance"));
-
-  m.def(
-      "recv_ptz_white_balance_oneshot",
-      [](py::capsule instance) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        return NDIlib_recv_ptz_white_balance_oneshot(p_instance);
-      },
-      py::arg("instance"));
-
-  m.def(
-      "recv_ptz_white_balance_manual",
-      [](py::capsule instance, const float red, const float blue) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        return NDIlib_recv_ptz_white_balance_manual(p_instance, red, blue);
-      },
-      py::arg("instance"), py::arg("red"), py::arg("blue"));
-
-  m.def(
-      "recv_ptz_exposure_auto",
-      [](py::capsule instance) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        return NDIlib_recv_ptz_exposure_auto(p_instance);
-      },
-      py::arg("instance"));
-
-  m.def(
-      "recv_ptz_exposure_manual",
-      [](py::capsule instance, const float exposure_level) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        return NDIlib_recv_ptz_exposure_manual(p_instance, exposure_level);
-      },
-      py::arg("instance"), py::arg("exposure_level"));
-
-  m.def(
-      "recv_ptz_exposure_manual_v2",
-      [](py::capsule instance, const float iris, const float gain,
-         const float shutter_speed) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        return NDIlib_recv_ptz_exposure_manual_v2(p_instance, iris, gain,
-                                                  shutter_speed);
-      },
-      py::arg("instance"), py::arg("iris"), py::arg("gain"),
-      py::arg("shutter_speed"));
-
-  m.def(
-      "recv_recording_start",
-      [](py::capsule instance, const char *p_filename_hint) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        return NDIlib_recv_recording_start(p_instance, p_filename_hint);
-      },
-      py::arg("instance"), py::arg("filename_hint"));
-
-  m.def(
-      "recv_recording_stop",
-      [](py::capsule instance) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        return NDIlib_recv_recording_stop(p_instance);
-      },
-      py::arg("instance"));
-
-  m.def(
-      "recv_recording_set_audio_level",
-      [](py::capsule instance, const float level_dB) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        return NDIlib_recv_recording_set_audio_level(p_instance, level_dB);
-      },
-      py::arg("instance"), py::arg("level_dB"));
-
-  m.def(
-      "recv_recording_is_recording",
-      [](py::capsule instance) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        return NDIlib_recv_recording_is_recording(p_instance);
-      },
-      py::arg("instance"));
-
-  m.def(
-      "recv_recording_get_filename",
-      [](py::capsule instance) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        auto str = NDIlib_recv_recording_get_filename(p_instance);
-        auto ustr = PyUnicode_DecodeLocale(str, nullptr);
-        return py::reinterpret_steal<py::str>(ustr);
-      },
-      py::arg("instance"));
-
-  m.def(
-      "recv_recording_get_error",
-      [](py::capsule instance) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        auto str = NDIlib_recv_recording_get_error(p_instance);
-        auto ustr = PyUnicode_DecodeLocale(str, nullptr);
-        return py::reinterpret_steal<py::str>(ustr);
-      },
-      py::arg("instance"));
-
-  py::class_<NDIlib_recv_recording_time_t>(m, "RecvRecordingTime")
-      .def(py::init<>())
-      .def_readwrite("no_frames", &NDIlib_recv_recording_time_t::no_frames)
-      .def_readwrite("start_time", &NDIlib_recv_recording_time_t::start_time)
-      .def_readwrite("last_time", &NDIlib_recv_recording_time_t::last_time);
-
-  m.def(
-      "recv_recording_get_times",
-      [](py::capsule instance, NDIlib_recv_recording_time_t *p_times) {
-        auto p_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        return NDIlib_recv_recording_get_times(p_instance, p_times);
-      },
-      py::arg("instance"), py::arg("times"));
-
-  // Processing.NDI.Send
-  py::class_<NDIlib_send_create_t>(m, "SendCreate")
-      .def(py::init<const char *, const char *, bool, bool>(),
-           py::arg("p_ndi_name") = nullptr, py::arg("p_groups") = nullptr,
-           py::arg("clock_video") = true, py::arg("clock_audio") = true)
-      .def_property(
-          "ndi_name",
-          [](const NDIlib_send_create_t &self) {
-            if (!self.p_ndi_name)
-              return py::str();
-            auto ustr = PyUnicode_DecodeLocale(self.p_ndi_name, nullptr);
-            return py::reinterpret_steal<py::str>(ustr);
-          },
-          [](NDIlib_send_create_t &self, const char *name) {
-            static std::unordered_map<NDIlib_send_create_t *, std::string> strs;
-            strs[&self] = py::str(name);
-            self.p_ndi_name = strs[&self].c_str();
-          })
-      .def_property(
-          "groups",
-          [](const NDIlib_send_create_t &self) {
-            if (!self.p_groups)
-              return py::str();
-            auto ustr = PyUnicode_DecodeLocale(self.p_groups, nullptr);
-            return py::reinterpret_steal<py::str>(ustr);
-          },
-          [](NDIlib_send_create_t &self, const std::string &groups) {
-            static std::unordered_map<NDIlib_send_create_t *, std::string> strs;
-            strs[&self] = py::str(groups);
-            self.p_groups = strs[&self].c_str();
-          })
-      .def_readwrite("clock_video", &NDIlib_send_create_t::clock_video)
-      .def_readwrite("clock_audio", &NDIlib_send_create_t::clock_audio);
-
-  m.def(
-      "send_create",
-      [](const NDIlib_send_create_t *p_create_settings) {
-        auto p_instance = NDIlib_send_create(p_create_settings);
-        return py::capsule(p_instance, "SendInstance");
-      },
-      py::arg("create_settings") = nullptr);
-
-  m.def(
-      "send_destroy",
-      [](py::capsule instance) {
-        auto p_instance =
-            static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
-        NDIlib_send_destroy(p_instance);
-      },
-      py::arg("instance"));
-
-  m.def(
-      "send_send_video_v2",
-      [](py::capsule instance, const NDIlib_video_frame_v2_t *p_video_data) {
-        auto p_instance =
-            static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
-        NDIlib_send_send_video_v2(p_instance, p_video_data);
-      },
-      py::arg("instance"), py::arg("video_data"));
-
-  m.def(
-      "send_send_video_async_v2",
-      [](py::capsule instance, const NDIlib_video_frame_v2_t *p_video_data) {
-        auto p_instance =
-            static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
-        NDIlib_send_send_video_async_v2(p_instance, p_video_data);
-      },
-      py::arg("instance"), py::arg("video_data"));
-
-  m.def(
-      "send_send_audio_v2",
-      [](py::capsule instance, const NDIlib_audio_frame_v2_t *p_audio_data) {
-        auto p_instance =
-            static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
-        NDIlib_send_send_audio_v2(p_instance, p_audio_data);
-      },
-      py::arg("instance"), py::arg("audio_data"));
-
-  m.def(
-      "send_send_audio_v3",
-      [](py::capsule instance, const NDIlib_audio_frame_v3_t *p_audio_data) {
-        auto p_instance =
-            static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
-        NDIlib_send_send_audio_v3(p_instance, p_audio_data);
-      },
-      py::arg("instance"), py::arg("audio_data"));
-
-  m.def(
-      "send_send_metadata",
-      [](py::capsule instance, const NDIlib_metadata_frame_t *p_metadata) {
-        auto p_instance =
-            static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
-        NDIlib_send_send_metadata(p_instance, p_metadata);
-      },
-      py::arg("instance"), py::arg("metadata"));
-
-  m.def(
-      "send_capture",
-      [](py::capsule instance, NDIlib_metadata_frame_t *p_metadata,
-         uint32_t timeout_in_ms) {
-        auto p_instance =
-            static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
-        NDIlib_send_capture(p_instance, p_metadata, timeout_in_ms);
-      },
-      py::arg("instance"), py::arg("metadata"), py::arg("timeout_in_ms"));
-
-  m.def(
-      "send_free_metadata",
-      [](py::capsule instance, const NDIlib_metadata_frame_t *p_metadata) {
-        auto p_instance =
-            static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
-        NDIlib_send_free_metadata(p_instance, p_metadata);
-      },
-      py::arg("instance"), py::arg("metadata"));
-
-  m.def(
-      "send_get_tally",
-      [](py::capsule instance, NDIlib_tally_t *p_tally,
-         uint32_t timeout_in_ms) {
-        auto p_instance =
-            static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
-        return NDIlib_send_get_tally(p_instance, p_tally, timeout_in_ms);
-      },
-      py::arg("instance"), py::arg("tally"), py::arg("timeout_in_ms"));
-
-  m.def(
-      "send_get_no_connections",
-      [](py::capsule instance, uint32_t timeout_in_ms) {
-        auto p_instance =
-            static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
-        return NDIlib_send_get_no_connections(p_instance, timeout_in_ms);
-      },
-      py::arg("instance"), py::arg("timeout_in_ms"));
-
-  m.def(
-      "send_clear_connection_metadata",
-      [](py::capsule instance) {
-        auto p_instance =
-            static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
-        NDIlib_send_clear_connection_metadata(p_instance);
-      },
-      py::arg("instance"));
-
-  m.def(
-      "send_add_connection_metadata",
-      [](py::capsule instance, const NDIlib_metadata_frame_t *p_metadata) {
-        auto p_instance =
-            static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
-        NDIlib_send_add_connection_metadata(p_instance, p_metadata);
-      },
-      py::arg("instance"), py::arg("metadata"));
-
-  m.def(
-      "send_set_failover",
-      [](py::capsule instance, const NDIlib_source_t *p_failover_source) {
-        auto p_instance =
-            static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
-        NDIlib_send_set_failover(p_instance, p_failover_source);
-      },
-      py::arg("instance"), py::arg("failover_source"));
-
-  m.def(
-      "send_get_source_name",
-      [](py::capsule instance) {
-        auto p_instance =
-            static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
-        return NDIlib_send_get_source_name(p_instance);
-      },
-      py::arg("instance"));
-
-  // Processing.NDI.Routing
-  py::class_<NDIlib_routing_create_t>(m, "RoutingCreate")
-      .def(py::init<const char *, const char *>(),
-           py::arg("p_ndi_name") = nullptr, py::arg("p_groups") = nullptr)
-      .def_property(
-          "ndi_name",
-          [](const NDIlib_routing_create_t &self) {
-            if (!self.p_ndi_name)
-              return py::str();
-            auto ustr = PyUnicode_DecodeLocale(self.p_ndi_name, nullptr);
-            return py::reinterpret_steal<py::str>(ustr);
-          },
-          [](NDIlib_routing_create_t &self, const char *name) {
-            static std::unordered_map<NDIlib_routing_create_t *, std::string>
-                strs;
-            strs[&self] = py::str(name);
-            self.p_ndi_name = strs[&self].c_str();
-          })
-      .def_property(
-          "groups",
-          [](const NDIlib_routing_create_t &self) {
-            if (!self.p_groups)
-              return py::str();
-            auto ustr = PyUnicode_DecodeLocale(self.p_groups, nullptr);
-            return py::reinterpret_steal<py::str>(ustr);
-          },
-          [](NDIlib_routing_create_t &self, const std::string &groups) {
-            static std::unordered_map<NDIlib_routing_create_t *, std::string>
-                strs;
-            strs[&self] = py::str(groups);
-            self.p_groups = strs[&self].c_str();
-          });
-
-  m.def(
-      "routing_create",
-      [](const NDIlib_routing_create_t *p_create_settings) {
-        auto p_instance = NDIlib_routing_create(p_create_settings);
-        return py::capsule(p_instance, "RoutingInstance");
-      },
-      py::arg("create_settings"));
-
-  m.def(
-      "routing_destroy",
-      [](py::capsule instance) {
-        auto p_instance =
-            static_cast<NDIlib_routing_instance_type *>(instance.get_pointer());
-        NDIlib_routing_destroy(p_instance);
-      },
-      py::arg("instance"));
-
-  m.def(
-      "routing_change",
-      [](py::capsule instance, const NDIlib_source_t *p_source) {
-        auto p_instance =
-            static_cast<NDIlib_routing_instance_type *>(instance.get_pointer());
-        return NDIlib_routing_change(p_instance, p_source);
-      },
-      py::arg("instance"), py::arg("source"));
-
-  m.def(
-      "routing_clear",
-      [](py::capsule instance) {
-        auto p_instance =
-            static_cast<NDIlib_routing_instance_type *>(instance.get_pointer());
-        NDIlib_routing_clear(p_instance);
-      },
-      py::arg("instance"));
-
-  m.def(
-      "routing_get_no_connections",
-      [](py::capsule instance, uint32_t timeout_in_ms) {
-        auto p_instance =
-            static_cast<NDIlib_routing_instance_type *>(instance.get_pointer());
-        return NDIlib_routing_get_no_connections(p_instance, timeout_in_ms);
-      },
-      py::arg("instance"), py::arg("timeout_in_ms"));
-
-  m.def(
-      "routing_get_source_name(",
-      [](py::capsule instance) {
-        auto p_instance =
-            static_cast<NDIlib_routing_instance_type *>(instance.get_pointer());
-        return NDIlib_routing_get_source_name(p_instance);
-      },
-      py::arg("instance"));
-
-  // Processing.NDI.utilities
-  py::class_<NDIlib_audio_frame_interleaved_16s_t>(m,
-                                                   "AudioFrameInterleaved16s")
-      .def(py::init<int, int, int, int64_t, int, int16_t *>(),
-           py::arg("sample_rate") = 48000, py::arg("no_channels") = 2,
+           py::arg("recv_name") = "")
+      .def_property("source", &RecvCreate::get_source, &RecvCreate::set_source)
+      .def_property("color_format", &RecvCreate::get_color_format, &RecvCreate::set_color_format)
+      .def_property("bandwidth", &RecvCreate::get_bandwidth, &RecvCreate::set_bandwidth)
+      .def_property("allow_video_fields", &RecvCreate::get_allow_video_fields, &RecvCreate::set_allow_video_fields)
+      .def_property("recv_name", &RecvCreate::get_recv_name, &RecvCreate::set_recv_name);
+  py::class_<Receiver>(m, "Receiver")
+      .def(py::init<const RecvCreate&>())
+      .def("connect", &Receiver::connect, py::arg("source"))
+      .def("disconnect", &Receiver::disconnect)
+      .def("capture_v2", &Receiver::capture_v2, py::arg("timeout_in_ms") = 5000)
+      .def("capture_v3", &Receiver::capture_v3, py::arg("timeout_in_ms") = 5000)
+      .def("capture_v2_enhanced", &Receiver::capture_v2_enhanced, py::arg("timeout_in_ms") = 5000,
+           "Enhanced capture_v2 method returning CaptureResult with better type safety")
+      .def("connect_safe", &Receiver::connect_safe,
+           py::arg("source"), py::arg("retry_count") = 3)
+      .def("capture_v2_safe", &Receiver::capture_v2_safe,
+           py::arg("timeout_in_ms") = 5000, py::arg("max_retries") = 2)
+      .def("capture_v3_safe", &Receiver::capture_v3_safe,
+           py::arg("timeout_in_ms") = 5000, py::arg("max_retries") = 2)
+      .def("send_metadata", &Receiver::send_metadata)
+      .def("try_send_metadata", &Receiver::try_send_metadata)
+      .def("set_tally", &Receiver::set_tally)
+      .def("try_set_tally", &Receiver::try_set_tally)
+      .def("get_performance", &Receiver::get_performance)
+      .def("get_queue", &Receiver::get_queue)
+      .def("clear_connection_metadata", &Receiver::clear_connection_metadata)
+      .def("add_connection_metadata", &Receiver::add_connection_metadata)
+      .def("get_no_connections", &Receiver::get_no_connections)
+      .def("get_web_control", &Receiver::get_web_control)
+      .def("get_source_name", &Receiver::get_source_name, py::arg("timeout_in_ms") = 0);
+  py::class_<AudioFrameV2>(m, "AudioFrameV2")
+      .def(py::init<int, int, int, int64_t, int64_t>(),
+           py::arg("sample_rate") = 48000,
+           py::arg("no_channels") = 2,
            py::arg("no_samples") = 0,
            py::arg("timecode") = NDIlib_send_timecode_synthesize,
-           py::arg("reference_level") = 0, py::arg("p_data") = 0)
-      .def_readwrite("sample_rate",
-                     &NDIlib_audio_frame_interleaved_16s_t::sample_rate)
-      .def_readwrite("no_channels",
-                     &NDIlib_audio_frame_interleaved_16s_t::no_channels)
-      .def_readwrite("no_samples",
-                     &NDIlib_audio_frame_interleaved_16s_t::no_samples)
-      .def_readwrite("timecode",
-                     &NDIlib_audio_frame_interleaved_16s_t::timecode)
-      .def_readwrite("reference_level",
-                     &NDIlib_audio_frame_interleaved_16s_t::reference_level)
-      .def_property(
-          "data",
-          [](const NDIlib_audio_frame_interleaved_16s_t &self) {
-            size_t col = self.no_samples;
-            size_t row = self.no_channels;
-            size_t size = sizeof(int16_t);
-            auto buffer_info = py::buffer_info(
-                self.p_data, size, py::format_descriptor<int16_t>::format(), 2,
-                {row, col}, {col * size, size});
-            return py::array(buffer_info);
-          },
-          [](NDIlib_audio_frame_interleaved_16s_t &self,
-             py::array_t<int16_t> &array) {
-            auto info = array.request();
-            self.p_data = static_cast<int16_t *>(info.ptr);
-            self.no_channels = info.shape[0];
-            self.no_samples = info.shape[1];
-          });
-
-  py::class_<NDIlib_audio_frame_interleaved_32s_t>(m,
-                                                   "AudioFrameInterleaved32s")
-      .def(py::init<int, int, int, int64_t, int, int32_t *>(),
-           py::arg("sample_rate") = 48000, py::arg("no_channels") = 2,
+           py::arg("timestamp") = 0)
+      .def_property("data", &AudioFrameV2::get_data, &AudioFrameV2::set_data)
+      .def_property("metadata", &AudioFrameV2::get_metadata, &AudioFrameV2::set_metadata)
+      .def_property("sample_rate", &AudioFrameV2::get_sample_rate, &AudioFrameV2::set_sample_rate)
+      .def_property("no_channels", &AudioFrameV2::get_no_channels, &AudioFrameV2::set_no_channels)
+      .def_property("no_samples", &AudioFrameV2::get_no_samples, &AudioFrameV2::set_no_samples)
+      .def_property("timecode", &AudioFrameV2::get_timecode, &AudioFrameV2::set_timecode)
+      .def_property("timestamp", &AudioFrameV2::get_timestamp, &AudioFrameV2::set_timestamp)
+      .def_property_readonly("channel_stride_in_bytes", &AudioFrameV2::get_channel_stride_in_bytes);
+  py::class_<AudioFrameV3>(m, "AudioFrameV3")
+      .def(py::init<int, int, int, int64_t, NDIlib_FourCC_audio_type_e, int64_t>(),
+           py::arg("sample_rate") = 48000,
+           py::arg("no_channels") = 2,
            py::arg("no_samples") = 0,
            py::arg("timecode") = NDIlib_send_timecode_synthesize,
-           py::arg("reference_level") = 0, py::arg("p_data") = 0)
-      .def_readwrite("sample_rate",
-                     &NDIlib_audio_frame_interleaved_32s_t::sample_rate)
-      .def_readwrite("no_channels",
-                     &NDIlib_audio_frame_interleaved_32s_t::no_channels)
-      .def_readwrite("no_samples",
-                     &NDIlib_audio_frame_interleaved_32s_t::no_samples)
-      .def_readwrite("timecode",
-                     &NDIlib_audio_frame_interleaved_32s_t::timecode)
-      .def_readwrite("reference_level",
-                     &NDIlib_audio_frame_interleaved_32s_t::reference_level)
-      .def_property(
-          "data",
-          [](const NDIlib_audio_frame_interleaved_32s_t &self) {
-            size_t col = self.no_samples;
-            size_t row = self.no_channels;
-            size_t size = sizeof(int32_t);
-            auto buffer_info = py::buffer_info(
-                self.p_data, size, py::format_descriptor<int32_t>::format(), 2,
-                {row, col}, {col * size, size});
-            return py::array(buffer_info);
-          },
-          [](NDIlib_audio_frame_interleaved_32s_t &self,
-             py::array_t<int32_t> &array) {
-            auto info = array.request();
-            self.p_data = static_cast<int32_t *>(info.ptr);
-            self.no_channels = info.shape[0];
-            self.no_samples = info.shape[1];
-          });
-
-  py::class_<NDIlib_audio_frame_interleaved_32f_t>(m,
-                                                   "AudioFrameInterleaved32f")
-      .def(py::init<int, int, int, int64_t, float *>(),
-           py::arg("sample_rate") = 48000, py::arg("no_channels") = 2,
-           py::arg("no_samples") = 0,
-           py::arg("timecode") = NDIlib_send_timecode_synthesize,
-           py::arg("p_data") = 0)
-      .def_readwrite("sample_rate",
-                     &NDIlib_audio_frame_interleaved_32f_t::sample_rate)
-      .def_readwrite("no_channels",
-                     &NDIlib_audio_frame_interleaved_32f_t::no_channels)
-      .def_readwrite("no_samples",
-                     &NDIlib_audio_frame_interleaved_32f_t::no_samples)
-      .def_readwrite("timecode",
-                     &NDIlib_audio_frame_interleaved_32f_t::timecode)
-      .def_property(
-          "data",
-          [](const NDIlib_audio_frame_interleaved_32f_t &self) {
-            size_t col = self.no_samples;
-            size_t row = self.no_channels;
-            size_t size = sizeof(float);
-            auto buffer_info = py::buffer_info(
-                self.p_data, size, py::format_descriptor<float>::format(), 2,
-                {row, col}, {col * size, size});
-            return py::array(buffer_info);
-          },
-          [](NDIlib_audio_frame_interleaved_32f_t &self,
-             py::array_t<float> &array) {
-            auto info = array.request();
-            self.p_data = static_cast<float *>(info.ptr);
-            self.no_channels = info.shape[0];
-            self.no_samples = info.shape[1];
-          });
-
-  m.def(
-      "util_send_send_audio_interleaved_16s",
-      [](py::capsule instance,
-         const NDIlib_audio_frame_interleaved_16s_t *p_audio_data) {
-        auto p_instance =
-            static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
-        NDIlib_util_send_send_audio_interleaved_16s(p_instance, p_audio_data);
-      },
-      py::arg("instance"), py::arg("audio_data"));
-
-  m.def(
-      "util_send_send_audio_interleaved_32s",
-      [](py::capsule instance,
-         const NDIlib_audio_frame_interleaved_32s_t *p_audio_data) {
-        auto p_instance =
-            static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
-        NDIlib_util_send_send_audio_interleaved_32s(p_instance, p_audio_data);
-      },
-      py::arg("instance"), py::arg("audio_data"));
-
-  m.def(
-      "util_send_send_audio_interleaved_32f",
-      [](py::capsule instance,
-         const NDIlib_audio_frame_interleaved_32f_t *p_audio_data) {
-        auto p_instance =
-            static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
-        NDIlib_util_send_send_audio_interleaved_32f(p_instance, p_audio_data);
-      },
-      py::arg("instance"), py::arg("audio_data"));
-
-  m.def("util_audio_to_interleaved_16s_v2",
-        &NDIlib_util_audio_to_interleaved_16s_v2, py::arg("src"),
-        py::arg("dst"));
-
-  m.def("util_audio_from_interleaved_16s_v2",
-        &NDIlib_util_audio_from_interleaved_16s_v2, py::arg("src"),
-        py::arg("dst"));
-
-  m.def("util_audio_to_interleaved_32s_v2",
-        &NDIlib_util_audio_to_interleaved_32s_v2, py::arg("src"),
-        py::arg("dst"));
-
-  m.def("util_audio_from_interleaved_32s_v2",
-        &NDIlib_util_audio_from_interleaved_32s_v2, py::arg("src"),
-        py::arg("dst"));
-
-  m.def("util_audio_to_interleaved_32f_v2",
-        &NDIlib_util_audio_to_interleaved_32f_v2, py::arg("src"),
-        py::arg("dst"));
-
-  m.def("util_audio_from_interleaved_32f_v2",
-        &NDIlib_util_audio_from_interleaved_32f_v2, py::arg("src"),
-        py::arg("dst"));
-
-  m.def("util_V210_to_P216", &NDIlib_util_V210_to_P216, py::arg("src_v210"),
-        py::arg("dst_p216"));
-
-  m.def("util_P216_to_V210", &NDIlib_util_P216_to_V210, py::arg("src_p216"),
-        py::arg("dst_v210"));
-
-  // Processing.NDI.deprecated
-  // TODO
-
-  // Processing.NDI.FrameSync
-  m.def(
-      "framesync_create",
-      [](py::capsule instance) {
-        auto p_recv_instance =
-            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        auto p_instance = NDIlib_framesync_create(p_recv_instance);
-        return py::capsule(p_instance, "FrameSyncInstance");
-      },
-      py::arg("receiver"));
-
-  m.def(
-      "framesync_destroy",
-      [](py::capsule instance) {
-        auto p_instance = static_cast<NDIlib_framesync_instance_type *>(
-            instance.get_pointer());
-        NDIlib_framesync_destroy(p_instance);
-      },
-      py::arg("instance"));
-
-  m.def(
-      "framesync_capture_audio",
-      [](py::capsule instance, int sample_rate, int no_channels,
-         int no_samples) {
-        auto p_instance = static_cast<NDIlib_framesync_instance_type *>(
-            instance.get_pointer());
-        NDIlib_audio_frame_v2_t audio_frame;
-        NDIlib_framesync_capture_audio(p_instance, &audio_frame, sample_rate,
-                                       no_channels, no_samples);
-        return audio_frame;
-      },
-      py::arg("instance"), py::arg("sample_rate"), py::arg("no_channels"),
-      py::arg("no_samples"));
-
-  m.def(
-      "framesync_capture_audio_v2",
-      [](py::capsule instance, int sample_rate, int no_channels,
-         int no_samples) {
-        auto p_instance = static_cast<NDIlib_framesync_instance_type *>(
-            instance.get_pointer());
-        NDIlib_audio_frame_v3_t audio_frame;
-        NDIlib_framesync_capture_audio_v2(p_instance, &audio_frame, sample_rate,
-                                          no_channels, no_samples);
-        return audio_frame;
-      },
-      py::arg("instance"), py::arg("sample_rate"), py::arg("no_channels"),
-      py::arg("no_samples"));
-
-  m.def(
-      "framesync_free_audio",
-      [](py::capsule instance, NDIlib_audio_frame_v2_t *p_audio_data) {
-        auto p_instance = static_cast<NDIlib_framesync_instance_type *>(
-            instance.get_pointer());
-        NDIlib_framesync_free_audio(p_instance, p_audio_data);
-      },
-      py::arg("instance"), py::arg("audio_data"));
-
-  m.def(
-      "framesync_free_audio_v2",
-      [](py::capsule instance, NDIlib_audio_frame_v3_t *p_audio_data) {
-        auto p_instance = static_cast<NDIlib_framesync_instance_type *>(
-            instance.get_pointer());
-        NDIlib_framesync_free_audio_v2(p_instance, p_audio_data);
-      },
-      py::arg("instance"), py::arg("audio_data"));
-
-  m.def(
-      "framesync_audio_queue_depth",
-      [](py::capsule instance) {
-        auto p_instance = static_cast<NDIlib_framesync_instance_type *>(
-            instance.get_pointer());
-        return NDIlib_framesync_audio_queue_depth(p_instance);
-      },
-      py::arg("instance"));
-
-  m.def(
-      "framesync_capture_video",
-      [](py::capsule instance, NDIlib_frame_format_type_e field_type) {
-        auto p_instance = static_cast<NDIlib_framesync_instance_type *>(
-            instance.get_pointer());
-        NDIlib_video_frame_v2_t video_frame;
-        NDIlib_framesync_capture_video(p_instance, &video_frame, field_type);
-        return video_frame;
-      },
-      py::arg("instance"),
-      py::arg("field_type") = NDIlib_frame_format_type_progressive);
-
-  m.def(
-      "framesync_free_video",
-      [](py::capsule instance, NDIlib_video_frame_v2_t *p_video_data) {
-        auto p_instance = static_cast<NDIlib_framesync_instance_type *>(
-            instance.get_pointer());
-        NDIlib_framesync_free_video(p_instance, p_video_data);
-      },
-      py::arg("instance"), py::arg("video_data"));
+           py::arg("fourcc") = NDIlib_FourCC_audio_type_FLTP,
+           py::arg("timestamp") = 0)
+      .def_property("data", &AudioFrameV3::get_data, &AudioFrameV3::set_data)
+      .def_property("metadata", &AudioFrameV3::get_metadata, &AudioFrameV3::set_metadata)
+      .def_property("sample_rate", &AudioFrameV3::get_sample_rate, &AudioFrameV3::set_sample_rate)
+      .def_property("no_channels", &AudioFrameV3::get_no_channels, &AudioFrameV3::set_no_channels)
+      .def_property("no_samples", &AudioFrameV3::get_no_samples, &AudioFrameV3::set_no_samples)
+      .def_property("timecode", &AudioFrameV3::get_timecode, &AudioFrameV3::set_timecode)
+      .def_property("fourcc", &AudioFrameV3::get_fourcc, &AudioFrameV3::set_fourcc)
+      .def_property("timestamp", &AudioFrameV3::get_timestamp, &AudioFrameV3::set_timestamp)
+      .def_property_readonly("channel_stride_in_bytes", &AudioFrameV3::get_channel_stride_in_bytes);
+  py::class_<MetadataFrame>(m, "MetadataFrame")
+      .def(py::init<const std::string&, int64_t>(),
+           py::arg("data") = "",
+           py::arg("timecode") = NDIlib_send_timecode_synthesize)
+      .def_property("data", &MetadataFrame::get_data, &MetadataFrame::set_data)
+      .def_property("timecode", &MetadataFrame::get_timecode, &MetadataFrame::set_timecode)
+      .def_property_readonly("length", &MetadataFrame::get_length);
+  py::class_<Tally>(m, "Tally")
+      .def(py::init<bool, bool>(),
+           py::arg("on_program") = false,
+           py::arg("on_preview") = false)
+      .def_property("on_program", &Tally::get_on_program, &Tally::set_on_program)
+      .def_property("on_preview", &Tally::get_on_preview, &Tally::set_on_preview);
+  py::class_<RecvPerformance>(m, "RecvPerformance")
+      .def(py::init<int64_t, int64_t, int64_t>(),
+           py::arg("video_frames") = 0,
+           py::arg("audio_frames") = 0,
+           py::arg("metadata_frames") = 0)
+      .def_property("video_frames", &RecvPerformance::get_video_frames, &RecvPerformance::set_video_frames)
+      .def_property("audio_frames", &RecvPerformance::get_audio_frames, &RecvPerformance::set_audio_frames)
+      .def_property("metadata_frames", &RecvPerformance::get_metadata_frames, &RecvPerformance::set_metadata_frames);
+  py::class_<RecvQueue>(m, "RecvQueue")
+      .def(py::init<int, int, int>(),
+           py::arg("video_frames") = 0,
+           py::arg("audio_frames") = 0,
+           py::arg("metadata_frames") = 0)
+      .def_property("video_frames", &RecvQueue::get_video_frames, &RecvQueue::set_video_frames)
+      .def_property("audio_frames", &RecvQueue::get_audio_frames, &RecvQueue::set_audio_frames)
+      .def_property("metadata_frames", &RecvQueue::get_metadata_frames, &RecvQueue::set_metadata_frames);
+  py::class_<CapturedVideoFrame>(m, "CapturedVideoFrame")
+      .def_property_readonly("data", &CapturedVideoFrame::get_data)
+      .def_property_readonly("xres", &CapturedVideoFrame::get_xres)
+      .def_property_readonly("yres", &CapturedVideoFrame::get_yres)
+      .def_property_readonly("fourcc", &CapturedVideoFrame::get_fourcc)
+      .def_property_readonly("frame_rate_N", &CapturedVideoFrame::get_frame_rate_N)
+      .def_property_readonly("frame_rate_D", &CapturedVideoFrame::get_frame_rate_D)
+      .def_property_readonly("picture_aspect_ratio", &CapturedVideoFrame::get_picture_aspect_ratio)
+      .def_property_readonly("frame_format_type", &CapturedVideoFrame::get_frame_format_type)
+      .def_property_readonly("timecode", &CapturedVideoFrame::get_timecode)
+      .def_property_readonly("timestamp", &CapturedVideoFrame::get_timestamp)
+      .def_property_readonly("line_stride_in_bytes", &CapturedVideoFrame::get_line_stride_in_bytes);
+  py::class_<CapturedAudioFrameV2>(m, "CapturedAudioFrameV2")
+      .def_property_readonly("data", &CapturedAudioFrameV2::get_data)
+      .def_property_readonly("sample_rate", &CapturedAudioFrameV2::get_sample_rate)
+      .def_property_readonly("no_channels", &CapturedAudioFrameV2::get_no_channels)
+      .def_property_readonly("no_samples", &CapturedAudioFrameV2::get_no_samples)
+      .def_property_readonly("timecode", &CapturedAudioFrameV2::get_timecode)
+      .def_property_readonly("timestamp", &CapturedAudioFrameV2::get_timestamp)
+      .def_property_readonly("channel_stride_in_bytes", &CapturedAudioFrameV2::get_channel_stride_in_bytes);
+  py::class_<CapturedAudioFrameV3>(m, "CapturedAudioFrameV3")
+      .def_property_readonly("data", &CapturedAudioFrameV3::get_data)
+      .def_property_readonly("sample_rate", &CapturedAudioFrameV3::get_sample_rate)
+      .def_property_readonly("no_channels", &CapturedAudioFrameV3::get_no_channels)
+      .def_property_readonly("no_samples", &CapturedAudioFrameV3::get_no_samples)
+      .def_property_readonly("timecode", &CapturedAudioFrameV3::get_timecode)
+      .def_property_readonly("fourcc", &CapturedAudioFrameV3::get_fourcc)
+      .def_property_readonly("timestamp", &CapturedAudioFrameV3::get_timestamp)
+      .def_property_readonly("channel_stride_in_bytes", &CapturedAudioFrameV3::get_channel_stride_in_bytes);
+    py::class_<CaptureResult>(m, "CaptureResult",
+        "Enhanced capture result with type-safe frame data and status information")
+        .def(py::init<NDIlib_frame_type_e, bool, const std::string&>(),
+             py::arg("frame_type") = NDIlib_frame_type_none,
+             py::arg("success") = false,
+             py::arg("message") = "",
+             "Create a capture result object")
+        .def_readwrite("frame_type", &CaptureResult::frame_type,
+                      "The type of frame that was captured")
+        .def_readwrite("video", &CaptureResult::video,
+                      "Video frame data (None if not a video frame)")
+        .def_readwrite("audio", &CaptureResult::audio,
+                      "Audio frame data (None if not an audio frame)")
+        .def_readwrite("metadata", &CaptureResult::metadata,
+                      "Metadata (None if not metadata)")
+        .def_readwrite("success", &CaptureResult::success,
+                      "Whether the capture operation was successful")
+        .def_readwrite("status_message", &CaptureResult::status_message,
+                      "Human-readable status or error message")
+        .def("has_video", &CaptureResult::has_video,
+             "Check if this result contains video data")
+        .def("has_audio", &CaptureResult::has_audio,
+             "Check if this result contains audio data")
+        .def("has_metadata", &CaptureResult::has_metadata,
+             "Check if this result contains metadata")
+        .def("is_timeout", &CaptureResult::is_timeout,
+             "Check if this result represents a timeout")
+        .def("is_error", &CaptureResult::is_error,
+             "Check if this result represents an error")
+        .def("is_status_change", &CaptureResult::is_status_change,
+             "Check if this result represents a status change")
+        .def("to_tuple", &CaptureResult::to_tuple,
+             "Convert to legacy tuple format (frame_type, video, audio, metadata)")
+        .def("to_safe_tuple", &CaptureResult::to_safe_tuple,
+             "Convert to safe tuple format (success, message, frame_type, video, audio, metadata)")
+        .def("__repr__", [](const CaptureResult& r) {
+            return "<CaptureResult frame_type=" + std::to_string(static_cast<int>(r.frame_type)) +
+                   " success=" + (r.success ? "True" : "False") +
+                   " message='" + r.status_message + "'>";
+        });
 }
