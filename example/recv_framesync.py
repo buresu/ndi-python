@@ -39,7 +39,7 @@ def main():
         ndi.framesync_free_audio(ndi_framesync, a)
         time.sleep(33/1000)
 
-    ndi.framesync_destoroy(ndi_framesync)
+    ndi.framesync_destroy(ndi_framesync)
 
     ndi.recv_destroy(ndi_recv)
 
