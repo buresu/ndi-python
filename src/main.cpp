@@ -456,6 +456,22 @@ PYBIND11_MODULE(NDIlib, m) {
       py::arg("instance"), py::arg("source") = nullptr);
 
   m.def(
+      "recv_get_source_name",
+      [](py::capsule instance, uint32_t timeout_in_ms) -> py::object {
+        auto p_instance =
+            static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
+        const char *p_source_name = nullptr;
+        py::gil_scoped_release release;
+        bool result =
+            NDIlib_recv_get_source_name(p_instance, &p_source_name, timeout_in_ms);
+        py::gil_scoped_acquire acquire;
+        if (result && p_source_name)
+          return py::str(p_source_name);
+        return py::none();
+      },
+      py::arg("instance"), py::arg("timeout_in_ms") = 0);
+
+  m.def(
       "recv_capture_v2",
       [](py::capsule instance, uint32_t timeout_in_ms) {
         auto p_instance =
