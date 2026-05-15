@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.17)
 
-project(NDIlib VERSION 5.1.1)
+project(NDIlib VERSION 6.3.2)
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/Modules)
 
