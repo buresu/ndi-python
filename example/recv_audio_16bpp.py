@@ -64,7 +64,7 @@ def main():
             ndi.recv_free_metadata(ndi_recv, m)
             continue
 
-        if t == ndi.FRANE_TYPE_STATUS_CHANGE:
+        if t == ndi.FRAME_TYPE_STATUS_CHANGE:
             print('Receiver connection status changed.')
             continue
 
