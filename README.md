@@ -54,41 +54,30 @@ yay -S ndi-sdk
 ```
 
 ## Build
-### Build with setup.py
+
 ```
 git clone --recursive https://github.com/buresu/ndi-python.git
 cd ndi-python
-python setup.py build
-```
-For ubuntu you need to set the SDK directory in NDI_SDK_DIR as cmake options.  
-```
-env CMAKE_ARGS="-DNDI_SDK_DIR=/path/to/ndisdk" python setup.py build
-```
-You can also specify the python version.  
-```
-env CMAKE_ARGS="-DNDI_SDK_DIR=/path/to/ndisdk -DPYTHON_EXECUTABLE=/path/to/python3.8 -DPYBIND11_PYTHON_VERSION=3.8" /path/to/python3.8 setup.py build
+pip install .
 ```
 
-### Build for Python package
+If you need to set the NDI SDK directory explicitly:
 ```
-python setup.py bdist_wheel
+env CMAKE_ARGS="-DNDI_SDK_DIR=/path/to/ndisdk" pip install .
+```
+
+To build for a specific Python version:
+```
+CMAKE_ARGS="-DNDI_SDK_DIR=/path/to/ndisdk" /path/to/python3.12 -m pip install .
 ```
 
 ### Build only CMake
 ```
 git clone --recursive https://github.com/buresu/ndi-python.git
-cd /path/to/build
-cmake /path/to/project
-cmake --build /path/to/build --config Release
-```
-
-For ubuntu you need to set the SDK directory in NDI_SDK_DIR.  
-And build as follows.  
-```
+mkdir build && cd build
 cmake /path/to/project -DNDI_SDK_DIR=/path/to/ndisdk
-cmake --build /path/to/build --config Release
-```
-After build copy ndi-python binary and NDI binary to execute directory.  
+cmake --build . --config Release
+```  
 
 ## License
 ndi-python is MIT License  
