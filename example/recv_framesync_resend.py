@@ -54,7 +54,7 @@ def main():
         else:
             time.sleep(33/1000)
 
-    ndi.framesync_destoroy(ndi_framesync)
+    ndi.framesync_destroy(ndi_framesync)
 
     ndi.recv_destroy(ndi_recv)
 
