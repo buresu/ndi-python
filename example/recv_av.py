@@ -47,9 +47,7 @@ def main():
     video_stream.bit_rate_tolerance = 12e+6
     video_stream.codec_context.time_base = Fraction(1, fps)
 
-    audio_stream = output.add_stream('aac', rate=48000)
-    audio_stream.channels = 2
-    audio_stream.format = 'fltp'
+    audio_stream = output.add_stream('aac', rate=48000, layout='stereo')
     audio_stream.time_base = Fraction(1, 48000)
 
     start = time.time()
@@ -70,10 +68,10 @@ def main():
 
         elif t == ndi.FRAME_TYPE_AUDIO:
 
-            av_audio_frame = av.AudioFrame.from_ndarray(a.data, format='fltp')
-            av_audio_frame.sample_rate = audio_stream.rate
-            av_audio_frame.time_base = Fraction(1, audio_stream.rate)
-            av_audio_frame.pts = int((time.time() - start) * audio_stream.rate)
+            av_audio_frame = av.AudioFrame.from_ndarray(a.data, format='fltp', layout='stereo')
+            av_audio_frame.sample_rate = 48000
+            av_audio_frame.time_base = Fraction(1, 48000)
+            av_audio_frame.pts = int((time.time() - start) * 48000)
             for packet in audio_stream.encode(av_audio_frame):
                 output.mux(packet)
 
