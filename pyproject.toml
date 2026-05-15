@@ -1,0 +1,44 @@
+[build-system]
+requires = ["scikit-build-core>=0.10"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "ndi-python"
+version = "6.3.2.0"
+description = "Wrapper package for NDI SDK python bindings."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Naoto Kondo", email = "cgigcp3yqt@gmail.com" }]
+keywords = ["NDI", "NewTek", "Video Production"]
+classifiers = [
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: C++",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Software Development",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Multimedia",
+    "Topic :: Multimedia :: Graphics",
+    "Topic :: Multimedia :: Sound/Audio",
+    "Topic :: Multimedia :: Video",
+    "Topic :: System :: Networking",
+]
+requires-python = ">=3.10"
+dependencies = ["numpy"]
+
+[project.urls]
+Homepage = "https://github.com/buresu/ndi-python"
+
+[tool.scikit-build]
+wheel.packages = ["src/NDIlib"]

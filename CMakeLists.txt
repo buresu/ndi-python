@@ -9,7 +9,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0")
 set(CMAKE_OSX_ARCHITECTURES "arm64")
 
-add_subdirectory("lib/pybind11")
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/lib/pybind11")
 
 find_package(NDI REQUIRED)
 
@@ -38,22 +38,22 @@ endif()
 # install
 install(
   TARGETS NDIlib
-  RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}
-  LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}
+  RUNTIME DESTINATION NDIlib
+  LIBRARY DESTINATION NDIlib
 )
 if(WIN32)
   install(
     FILES
     "${NDI_DIR}/Bin/${NDI_ARCH}/Processing.NDI.Lib.${NDI_ARCH}.dll"
     "${NDI_LICENSE_DIR}/Processing.NDI.Lib.Licenses.txt"
-    DESTINATION ${CMAKE_INSTALL_PREFIX}
+    DESTINATION NDIlib
   )
 elseif(APPLE)
   install(
     FILES
     "${NDI_LIBRARY_DIR}/libndi.dylib"
     "${NDI_LICENSE_DIR}/libndi_licenses.txt"
-    DESTINATION ${CMAKE_INSTALL_PREFIX}
+    DESTINATION NDIlib
   )
 elseif(UNIX)
   file(GLOB DLL "${NDI_LIBRARY_DIR}/libndi.so*")
@@ -61,6 +61,6 @@ elseif(UNIX)
     FILES
     ${DLL}
     "${NDI_LICENSE_DIR}/libndi_licenses.txt"
-    DESTINATION ${CMAKE_INSTALL_PREFIX}
+    DESTINATION NDIlib
   )
 endif()
