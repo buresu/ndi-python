@@ -271,6 +271,83 @@ PYBIND11_MODULE(NDIlib, m) {
       .def_readwrite("on_program", &NDIlib_tally_t::on_program)
       .def_readwrite("on_preview", &NDIlib_tally_t::on_preview);
 
+  py::enum_<NDIlib_receiver_type_e>(m, "ReceiverType", py::arithmetic())
+      .value("RECEIVER_TYPE_NONE", NDIlib_receiver_type_none)
+      .value("RECEIVER_TYPE_METADATA", NDIlib_receiver_type_metadata)
+      .value("RECEIVER_TYPE_VIDEO", NDIlib_receiver_type_video)
+      .value("RECEIVER_TYPE_AUDIO", NDIlib_receiver_type_audio)
+      .value("RECEIVER_TYPE_MAX", NDIlib_receiver_type_max)
+      .export_values();
+
+  py::enum_<NDIlib_receiver_command_e>(m, "ReceiverCommand", py::arithmetic())
+      .value("RECEIVER_COMMAND_NONE", NDIlib_receiver_command_none)
+      .value("RECEIVER_COMMAND_CONNECT", NDIlib_receiver_command_connect)
+      .value("RECEIVER_COMMAND_MAX", NDIlib_receiver_command_max)
+      .export_values();
+
+  py::class_<NDIlib_listener_event>(m, "ListenerEvent")
+      .def_property_readonly("uuid", [](const NDIlib_listener_event &s) {
+        return s.p_uuid ? std::string(s.p_uuid) : std::string();
+      })
+      .def_property_readonly("name", [](const NDIlib_listener_event &s) {
+        return s.p_name ? std::string(s.p_name) : std::string();
+      })
+      .def_property_readonly("value", [](const NDIlib_listener_event &s) {
+        return s.p_value ? std::string(s.p_value) : std::string();
+      });
+
+  py::class_<NDIlib_receiver_t>(m, "Receiver")
+      .def_property_readonly("uuid", [](const NDIlib_receiver_t &s) {
+        return s.p_uuid ? std::string(s.p_uuid) : std::string();
+      })
+      .def_property_readonly("name", [](const NDIlib_receiver_t &s) {
+        return s.p_name ? std::string(s.p_name) : std::string();
+      })
+      .def_property_readonly("input_uuid", [](const NDIlib_receiver_t &s) {
+        return s.p_input_uuid ? std::string(s.p_input_uuid) : std::string();
+      })
+      .def_property_readonly("input_name", [](const NDIlib_receiver_t &s) {
+        return s.p_input_name ? std::string(s.p_input_name) : std::string();
+      })
+      .def_property_readonly("address", [](const NDIlib_receiver_t &s) {
+        return s.p_address ? std::string(s.p_address) : std::string();
+      })
+      .def_property_readonly("streams", [](const NDIlib_receiver_t &s) {
+        std::vector<NDIlib_receiver_type_e> result;
+        for (uint32_t i = 0; i < s.num_streams; ++i)
+          result.push_back(s.p_streams[i]);
+        return result;
+      })
+      .def_property_readonly("commands", [](const NDIlib_receiver_t &s) {
+        std::vector<NDIlib_receiver_command_e> result;
+        for (uint32_t i = 0; i < s.num_commands; ++i)
+          result.push_back(s.p_commands[i]);
+        return result;
+      })
+      .def_readonly("events_subscribed", &NDIlib_receiver_t::events_subscribed);
+
+  py::class_<NDIlib_sender_t>(m, "Sender")
+      .def_property_readonly("uuid", [](const NDIlib_sender_t &s) {
+        return s.p_uuid ? std::string(s.p_uuid) : std::string();
+      })
+      .def_property_readonly("name", [](const NDIlib_sender_t &s) {
+        return s.p_name ? std::string(s.p_name) : std::string();
+      })
+      .def_property_readonly("metadata", [](const NDIlib_sender_t &s) {
+        return s.p_metadata ? std::string(s.p_metadata) : std::string();
+      })
+      .def_property_readonly("address", [](const NDIlib_sender_t &s) {
+        return s.p_address ? std::string(s.p_address) : std::string();
+      })
+      .def_readonly("port", &NDIlib_sender_t::port)
+      .def_property_readonly("groups", [](const NDIlib_sender_t &s) {
+        std::vector<std::string> result;
+        for (uint32_t i = 0; i < s.num_groups; ++i)
+          if (s.p_groups[i]) result.push_back(s.p_groups[i]);
+        return result;
+      })
+      .def_readonly("events_subscribed", &NDIlib_sender_t::events_subscribed);
+
   // Processing.NDI.Lib
   m.def("initialize", &NDIlib_initialize);
 
@@ -1430,4 +1507,247 @@ PYBIND11_MODULE(NDIlib, m) {
         NDIlib_framesync_free_video(p_instance, p_video_data);
       },
       py::arg("instance"), py::arg("video_data"));
+
+  // Processing.NDI.RecvListener
+
+  py::class_<NDIlib_recv_listener_create_t>(m, "RecvListenerCreateV2")
+      .def(py::init<>())
+      .def(py::init([](const std::string &url) {
+             auto *p = new NDIlib_recv_listener_create_t();
+             p->p_url_address = url.empty() ? nullptr : url.c_str();
+             return p;
+           }),
+           py::arg("url_address") = std::string())
+      .def_property(
+          "url_address",
+          [](const NDIlib_recv_listener_create_t &s) {
+            return s.p_url_address ? std::string(s.p_url_address) : std::string();
+          },
+          [](NDIlib_recv_listener_create_t &, const std::string &) {});
+
+  m.def(
+      "recv_listener_create",
+      [](const NDIlib_recv_listener_create_t *p_create) {
+        auto p = NDIlib_recv_listener_create(p_create);
+        return py::capsule(p, "recv_listener", [](void *p) {
+          NDIlib_recv_listener_destroy(
+              static_cast<NDIlib_recv_listener_instance_t>(p));
+        });
+      },
+      py::arg("create_settings") = nullptr);
+
+  m.def(
+      "recv_listener_destroy",
+      [](py::capsule instance) {
+        NDIlib_recv_listener_destroy(
+            static_cast<NDIlib_recv_listener_instance_t>(instance.get_pointer()));
+      },
+      py::arg("instance"));
+
+  m.def(
+      "recv_listener_is_connected",
+      [](py::capsule instance) {
+        return NDIlib_recv_listener_is_connected(
+            static_cast<NDIlib_recv_listener_instance_t>(instance.get_pointer()));
+      },
+      py::arg("instance"));
+
+  m.def(
+      "recv_listener_get_server_url",
+      [](py::capsule instance) -> py::object {
+        auto url = NDIlib_recv_listener_get_server_url(
+            static_cast<NDIlib_recv_listener_instance_t>(instance.get_pointer()));
+        if (url) return py::str(url);
+        return py::none();
+      },
+      py::arg("instance"));
+
+  m.def(
+      "recv_listener_get_receivers",
+      [](py::capsule instance) {
+        uint32_t num = 0;
+        auto p = NDIlib_recv_listener_get_receivers(
+            static_cast<NDIlib_recv_listener_instance_t>(instance.get_pointer()),
+            &num);
+        std::vector<NDIlib_receiver_t> result;
+        for (uint32_t i = 0; i < num; ++i) result.push_back(p[i]);
+        return result;
+      },
+      py::arg("instance"));
+
+  m.def(
+      "recv_listener_wait_for_receivers",
+      [](py::capsule instance, uint32_t timeout_in_ms) {
+        py::gil_scoped_release release;
+        return NDIlib_recv_listener_wait_for_receivers(
+            static_cast<NDIlib_recv_listener_instance_t>(instance.get_pointer()),
+            timeout_in_ms);
+      },
+      py::arg("instance"), py::arg("timeout_in_ms"));
+
+  m.def(
+      "recv_listener_subscribe_events",
+      [](py::capsule instance, const std::string &uuid) {
+        NDIlib_recv_listener_subscribe_events(
+            static_cast<NDIlib_recv_listener_instance_t>(instance.get_pointer()),
+            uuid.c_str());
+      },
+      py::arg("instance"), py::arg("receiver_uuid"));
+
+  m.def(
+      "recv_listener_unsubscribe_events",
+      [](py::capsule instance, const std::string &uuid) {
+        NDIlib_recv_listener_unsubscribe_events(
+            static_cast<NDIlib_recv_listener_instance_t>(instance.get_pointer()),
+            uuid.c_str());
+      },
+      py::arg("instance"), py::arg("receiver_uuid"));
+
+  m.def(
+      "recv_listener_get_events",
+      [](py::capsule instance, uint32_t timeout_in_ms) {
+        uint32_t num = 0;
+        auto p = NDIlib_recv_listener_get_events(
+            static_cast<NDIlib_recv_listener_instance_t>(instance.get_pointer()),
+            &num, timeout_in_ms);
+        std::vector<NDIlib_listener_event> result;
+        if (p) {
+          for (uint32_t i = 0; i < num; ++i) result.push_back(p[i]);
+          NDIlib_recv_listener_free_events(
+              static_cast<NDIlib_recv_listener_instance_t>(instance.get_pointer()),
+              p);
+        }
+        return result;
+      },
+      py::arg("instance"), py::arg("timeout_in_ms") = 0);
+
+  m.def(
+      "recv_listener_send_connect",
+      [](py::capsule instance, const std::string &receiver_uuid,
+         py::object source_name) {
+        const char *src = nullptr;
+        std::string src_str;
+        if (!source_name.is_none()) {
+          src_str = source_name.cast<std::string>();
+          src = src_str.c_str();
+        }
+        return NDIlib_recv_listener_send_connect(
+            static_cast<NDIlib_recv_listener_instance_t>(instance.get_pointer()),
+            receiver_uuid.c_str(), src);
+      },
+      py::arg("instance"), py::arg("receiver_uuid"),
+      py::arg("source_name") = py::none());
+
+  // Processing.NDI.SendListener
+
+  py::class_<NDIlib_send_listener_create_t>(m, "SendListenerCreateV2")
+      .def(py::init<>())
+      .def(py::init([](const std::string &url) {
+             auto *p = new NDIlib_send_listener_create_t();
+             p->p_url_address = url.empty() ? nullptr : url.c_str();
+             return p;
+           }),
+           py::arg("url_address") = std::string())
+      .def_property(
+          "url_address",
+          [](const NDIlib_send_listener_create_t &s) {
+            return s.p_url_address ? std::string(s.p_url_address) : std::string();
+          },
+          [](NDIlib_send_listener_create_t &, const std::string &) {});
+
+  m.def(
+      "send_listener_create",
+      [](const NDIlib_send_listener_create_t *p_create) {
+        auto p = NDIlib_send_listener_create(p_create);
+        return py::capsule(p, "send_listener", [](void *p) {
+          NDIlib_send_listener_destroy(
+              static_cast<NDIlib_send_listener_instance_t>(p));
+        });
+      },
+      py::arg("create_settings") = nullptr);
+
+  m.def(
+      "send_listener_destroy",
+      [](py::capsule instance) {
+        NDIlib_send_listener_destroy(
+            static_cast<NDIlib_send_listener_instance_t>(instance.get_pointer()));
+      },
+      py::arg("instance"));
+
+  m.def(
+      "send_listener_is_connected",
+      [](py::capsule instance) {
+        return NDIlib_send_listener_is_connected(
+            static_cast<NDIlib_send_listener_instance_t>(instance.get_pointer()));
+      },
+      py::arg("instance"));
+
+  m.def(
+      "send_listener_get_server_url",
+      [](py::capsule instance) -> py::object {
+        auto url = NDIlib_send_listener_get_server_url(
+            static_cast<NDIlib_send_listener_instance_t>(instance.get_pointer()));
+        if (url) return py::str(url);
+        return py::none();
+      },
+      py::arg("instance"));
+
+  m.def(
+      "send_listener_get_senders",
+      [](py::capsule instance) {
+        uint32_t num = 0;
+        auto p = NDIlib_send_listener_get_senders(
+            static_cast<NDIlib_send_listener_instance_t>(instance.get_pointer()),
+            &num);
+        std::vector<NDIlib_sender_t> result;
+        for (uint32_t i = 0; i < num; ++i) result.push_back(p[i]);
+        return result;
+      },
+      py::arg("instance"));
+
+  m.def(
+      "send_listener_wait_for_senders",
+      [](py::capsule instance, uint32_t timeout_in_ms) {
+        py::gil_scoped_release release;
+        return NDIlib_send_listener_wait_for_senders(
+            static_cast<NDIlib_send_listener_instance_t>(instance.get_pointer()),
+            timeout_in_ms);
+      },
+      py::arg("instance"), py::arg("timeout_in_ms"));
+
+  m.def(
+      "send_listener_subscribe_events",
+      [](py::capsule instance, const std::string &uuid) {
+        NDIlib_send_listener_subscribe_events(
+            static_cast<NDIlib_send_listener_instance_t>(instance.get_pointer()),
+            uuid.c_str());
+      },
+      py::arg("instance"), py::arg("sender_uuid"));
+
+  m.def(
+      "send_listener_unsubscribe_events",
+      [](py::capsule instance, const std::string &uuid) {
+        NDIlib_send_listener_unsubscribe_events(
+            static_cast<NDIlib_send_listener_instance_t>(instance.get_pointer()),
+            uuid.c_str());
+      },
+      py::arg("instance"), py::arg("sender_uuid"));
+
+  m.def(
+      "send_listener_get_events",
+      [](py::capsule instance, uint32_t timeout_in_ms) {
+        uint32_t num = 0;
+        auto p = NDIlib_send_listener_get_events(
+            static_cast<NDIlib_send_listener_instance_t>(instance.get_pointer()),
+            &num, timeout_in_ms);
+        std::vector<NDIlib_listener_event> result;
+        if (p) {
+          for (uint32_t i = 0; i < num; ++i) result.push_back(p[i]);
+          NDIlib_send_listener_free_events(
+              static_cast<NDIlib_send_listener_instance_t>(instance.get_pointer()),
+              p);
+        }
+        return result;
+      },
+      py::arg("instance"), py::arg("timeout_in_ms") = 0);
 }
