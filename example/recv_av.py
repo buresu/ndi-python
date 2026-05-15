@@ -37,7 +37,7 @@ def main():
     ndi.find_destroy(ndi_find)
 
     fps = 30
-    output = av.open('../output.mov', mode='w')
+    output = av.open('output.mov', mode='w')
 
     video_stream = output.add_stream('mpeg4', rate=fps)
     video_stream.width = 1920
