@@ -1410,7 +1410,7 @@ PYBIND11_MODULE(NDIlib, m) {
         py::arg("dst_v210"));
 
   // Processing.NDI.deprecated
-  // TODO
+  // NOT IMPLEMENTED
 
   // Processing.NDI.FrameSync
   m.def(
