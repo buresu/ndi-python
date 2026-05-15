@@ -1282,24 +1282,48 @@ PYBIND11_MODULE(NDIlib, m) {
         &NDIlib_util_audio_to_interleaved_16s_v2, py::arg("src"),
         py::arg("dst"));
 
+  m.def("util_audio_to_interleaved_16s_v3",
+        &NDIlib_util_audio_to_interleaved_16s_v3, py::arg("src"),
+        py::arg("dst"));
+
   m.def("util_audio_from_interleaved_16s_v2",
         &NDIlib_util_audio_from_interleaved_16s_v2, py::arg("src"),
+        py::arg("dst"));
+
+  m.def("util_audio_from_interleaved_16s_v3",
+        &NDIlib_util_audio_from_interleaved_16s_v3, py::arg("src"),
         py::arg("dst"));
 
   m.def("util_audio_to_interleaved_32s_v2",
         &NDIlib_util_audio_to_interleaved_32s_v2, py::arg("src"),
         py::arg("dst"));
 
+  m.def("util_audio_to_interleaved_32s_v3",
+        &NDIlib_util_audio_to_interleaved_32s_v3, py::arg("src"),
+        py::arg("dst"));
+
   m.def("util_audio_from_interleaved_32s_v2",
         &NDIlib_util_audio_from_interleaved_32s_v2, py::arg("src"),
+        py::arg("dst"));
+
+  m.def("util_audio_from_interleaved_32s_v3",
+        &NDIlib_util_audio_from_interleaved_32s_v3, py::arg("src"),
         py::arg("dst"));
 
   m.def("util_audio_to_interleaved_32f_v2",
         &NDIlib_util_audio_to_interleaved_32f_v2, py::arg("src"),
         py::arg("dst"));
 
+  m.def("util_audio_to_interleaved_32f_v3",
+        &NDIlib_util_audio_to_interleaved_32f_v3, py::arg("src"),
+        py::arg("dst"));
+
   m.def("util_audio_from_interleaved_32f_v2",
         &NDIlib_util_audio_from_interleaved_32f_v2, py::arg("src"),
+        py::arg("dst"));
+
+  m.def("util_audio_from_interleaved_32f_v3",
+        &NDIlib_util_audio_from_interleaved_32f_v3, py::arg("src"),
         py::arg("dst"));
 
   m.def("util_V210_to_P216", &NDIlib_util_V210_to_P216, py::arg("src_v210"),
