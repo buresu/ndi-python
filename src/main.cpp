@@ -1750,4 +1750,125 @@ PYBIND11_MODULE(NDIlib, m) {
         return result;
       },
       py::arg("instance"), py::arg("timeout_in_ms") = 0);
+
+  // Processing.NDI.RecvAdvertiser
+
+  py::class_<NDIlib_recv_advertiser_create_t>(m, "RecvAdvertiserCreateV2")
+      .def(py::init<>())
+      .def(py::init([](const std::string &url) {
+             auto *p = new NDIlib_recv_advertiser_create_t();
+             p->p_url_address = url.empty() ? nullptr : url.c_str();
+             return p;
+           }),
+           py::arg("url_address") = std::string())
+      .def_property(
+          "url_address",
+          [](const NDIlib_recv_advertiser_create_t &s) {
+            return s.p_url_address ? std::string(s.p_url_address) : std::string();
+          },
+          [](NDIlib_recv_advertiser_create_t &, const std::string &) {});
+
+  m.def(
+      "recv_advertiser_create",
+      [](const NDIlib_recv_advertiser_create_t *p_create) {
+        auto p = NDIlib_recv_advertiser_create(p_create);
+        return py::capsule(p, "recv_advertiser", [](void *p) {
+          NDIlib_recv_advertiser_destroy(
+              static_cast<NDIlib_recv_advertiser_instance_t>(p));
+        });
+      },
+      py::arg("create_settings") = nullptr);
+
+  m.def(
+      "recv_advertiser_destroy",
+      [](py::capsule instance) {
+        NDIlib_recv_advertiser_destroy(
+            static_cast<NDIlib_recv_advertiser_instance_t>(instance.get_pointer()));
+      },
+      py::arg("instance"));
+
+  m.def(
+      "recv_advertiser_add_receiver",
+      [](py::capsule advertiser, py::capsule receiver,
+         bool allow_controlling, bool allow_monitoring,
+         py::object input_group_name) {
+        const char *name = nullptr;
+        std::string name_str;
+        if (!input_group_name.is_none()) {
+          name_str = input_group_name.cast<std::string>();
+          name = name_str.c_str();
+        }
+        return NDIlib_recv_advertiser_add_receiver(
+            static_cast<NDIlib_recv_advertiser_instance_t>(advertiser.get_pointer()),
+            static_cast<NDIlib_recv_instance_t>(receiver.get_pointer()),
+            allow_controlling, allow_monitoring, name);
+      },
+      py::arg("advertiser"), py::arg("receiver"),
+      py::arg("allow_controlling") = true, py::arg("allow_monitoring") = true,
+      py::arg("input_group_name") = py::none());
+
+  m.def(
+      "recv_advertiser_del_receiver",
+      [](py::capsule advertiser, py::capsule receiver) {
+        return NDIlib_recv_advertiser_del_receiver(
+            static_cast<NDIlib_recv_advertiser_instance_t>(advertiser.get_pointer()),
+            static_cast<NDIlib_recv_instance_t>(receiver.get_pointer()));
+      },
+      py::arg("advertiser"), py::arg("receiver"));
+
+  // Processing.NDI.SendAdvertiser
+
+  py::class_<NDIlib_send_advertiser_create_t>(m, "SendAdvertiserCreateV2")
+      .def(py::init<>())
+      .def(py::init([](const std::string &url) {
+             auto *p = new NDIlib_send_advertiser_create_t();
+             p->p_url_address = url.empty() ? nullptr : url.c_str();
+             return p;
+           }),
+           py::arg("url_address") = std::string())
+      .def_property(
+          "url_address",
+          [](const NDIlib_send_advertiser_create_t &s) {
+            return s.p_url_address ? std::string(s.p_url_address) : std::string();
+          },
+          [](NDIlib_send_advertiser_create_t &, const std::string &) {});
+
+  m.def(
+      "send_advertiser_create",
+      [](const NDIlib_send_advertiser_create_t *p_create) {
+        auto p = NDIlib_send_advertiser_create(p_create);
+        return py::capsule(p, "send_advertiser", [](void *p) {
+          NDIlib_send_advertiser_destroy(
+              static_cast<NDIlib_send_advertiser_instance_t>(p));
+        });
+      },
+      py::arg("create_settings") = nullptr);
+
+  m.def(
+      "send_advertiser_destroy",
+      [](py::capsule instance) {
+        NDIlib_send_advertiser_destroy(
+            static_cast<NDIlib_send_advertiser_instance_t>(instance.get_pointer()));
+      },
+      py::arg("instance"));
+
+  m.def(
+      "send_advertiser_add_sender",
+      [](py::capsule advertiser, py::capsule sender, bool allow_monitoring) {
+        return NDIlib_send_advertiser_add_sender(
+            static_cast<NDIlib_send_advertiser_instance_t>(advertiser.get_pointer()),
+            static_cast<NDIlib_send_instance_t>(sender.get_pointer()),
+            allow_monitoring);
+      },
+      py::arg("advertiser"), py::arg("sender"),
+      py::arg("allow_monitoring") = true);
+
+  m.def(
+      "send_advertiser_del_sender",
+      [](py::capsule advertiser, py::capsule sender) {
+        return NDIlib_send_advertiser_del_sender(
+            static_cast<NDIlib_send_advertiser_instance_t>(advertiser.get_pointer()),
+            static_cast<NDIlib_send_instance_t>(sender.get_pointer()));
+      },
+      py::arg("advertiser"), py::arg("sender"));
 }
