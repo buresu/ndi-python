@@ -8,9 +8,9 @@ So you can install it using pip if it is a supported environment.
 pip install ndi-python
 ```
 The supported environment is as follows.  
-- Windows x64 Python(3.7-3.10)
-- macOS x64(>=10.12),arm64(>=11.0) Python(3.7-3.10)
-- Linux x64,aarch64 Python(3.7-3.10)
+- Windows x64 Python(3.10-3.14)
+- macOS arm64(>=11.0) Python(3.10-3.14)
+- Linux x64,aarch64 Python(3.10-3.14)
 
 ## Setup Avahi
 Linux requires Avahi to search for NDI sources.  
