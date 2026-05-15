@@ -22,7 +22,7 @@ class CMakeBuild(build_ext):
         if not self.dry_run:
             cmake_args = ['cmake', '..',
                           '-DCMAKE_INSTALL_PREFIX=%s' % install_dir,
-                          '-DPYTHON_EXECUTABLE=%s' % sys.executable]
+                          '-DPython_EXECUTABLE=%s' % sys.executable]
             if "CMAKE_ARGS" in os.environ:
                 cmake_args += [
                     item for item in os.environ["CMAKE_ARGS"].split(" ") if item]
