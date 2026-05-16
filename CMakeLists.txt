@@ -10,7 +10,11 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0")
 set(CMAKE_OSX_ARCHITECTURES "arm64")
 
 set(PYBIND11_FINDPYTHON ON)
-find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
+find_package(Python REQUIRED COMPONENTS Interpreter Development.Module
+             OPTIONAL_COMPONENTS Development.Embed)
+if(NOT TARGET Python::Python)
+  add_library(Python::Python INTERFACE IMPORTED)
+endif()
 find_package(pybind11 CONFIG REQUIRED)
 
 find_package(NDI REQUIRED)
