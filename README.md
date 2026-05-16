@@ -46,7 +46,7 @@ You should install according to your environment.
 
 ### Windows, Mac, Ubuntu
 Donwload and install NDI SDK.  
-https://ndi.tv/sdk/
+https://ndi.video/for-developers/ndi-sdk/download/
 
 ### Arch Linux
 ```
