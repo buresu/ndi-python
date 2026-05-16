@@ -22,9 +22,9 @@ def main():
     audio_frame.sample_rate = 48000
     audio_frame.no_channels = 4
     audio_frame.no_samples = 1920
+    audio_frame.data = np.zeros((4, 1920), dtype=np.int16)
 
     for i in range(1000):
-        audio_frame.data = np.zeros((4, 1920), dtype=np.int16)
         ndi.util_send_send_audio_interleaved_16s(ndi_send, audio_frame)
         print('Frame number %d sent.' % i)
 
