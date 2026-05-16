@@ -88,8 +88,15 @@ jobs:
           innoextract ndi-sdk.exe --output-dir ndi-sdk-win
           Remove-Item ndi-sdk.exe
 
+      - name: Set NDI_SDK_DIR (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $path = "${{ github.workspace }}" -replace '\\', '/'
+          echo "NDI_SDK_DIR=$path/ndi-sdk-win/app" >> $env:GITHUB_ENV
+
       - name: Build wheels
         uses: pypa/cibuildwheel@v3.4.1
         env:
           CIBW_ENVIRONMENT_LINUX: CMAKE_ARGS="-DNDI_SDK_DIR=/project/ndi-sdk"
-          CIBW_ENVIRONMENT_WINDOWS: CMAKE_ARGS="-DNDI_SDK_DIR=${{ github.workspace }}/ndi-sdk-win/app"
+          CIBW_ENVIRONMENT_WINDOWS: CMAKE_ARGS="-DNDI_SDK_DIR=${{ env.NDI_SDK_DIR }}"
