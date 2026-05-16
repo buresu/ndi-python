@@ -25,7 +25,7 @@ jobs:
         if: runner.os == 'Linux'
         uses: docker/setup-qemu-action@v4
         with:
-          platforms: arm64
+          platforms: arm64,arm
 
       # Linux: run installer (EULA via echo y), rename to ndi-sdk/
       # Accessible in Docker container at /project/ndi-sdk

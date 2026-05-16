@@ -23,7 +23,7 @@ jobs:
         if: runner.os == 'Linux'
         uses: docker/setup-qemu-action@v4
         with:
-          platforms: arm64
+          platforms: arm64,arm
 
       - name: Cache NDI SDK (Linux)
         if: runner.os == 'Linux'

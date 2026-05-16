@@ -10,7 +10,7 @@ pip install ndi-python
 The supported environment is as follows.  
 - Windows x64 Python(3.10-3.14)
 - macOS arm64(>=13.0) Python(3.10-3.14)
-- Linux x64,aarch64 Python(3.10-3.14)
+- Linux x64,aarch64,armv7l Python(3.10-3.14)
 
 ## Setup Avahi
 Linux requires Avahi to search for NDI sources.  
