@@ -245,3 +245,9 @@ pyrightconfig.json
 .ionide
 
 # End of https://www.toptal.com/developers/gitignore/api/c++,cmake,python,visualstudiocode
+
+# NDI SDK (downloaded by CI)
+ndi-sdk/
+ndi-sdk-installer.tar.gz
+ndi-sdk.pkg
+ndi-sdk.exe

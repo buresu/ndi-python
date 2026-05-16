@@ -1,0 +1,107 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+env:
+  NDI_SDK_VERSION: "6.3.2.0"
+
+jobs:
+  build_wheels:
+    name: Build wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Set up QEMU
+        if: runner.os == 'Linux'
+        uses: docker/setup-qemu-action@v4
+        with:
+          platforms: arm64
+
+      - name: Cache NDI SDK (Linux)
+        if: runner.os == 'Linux'
+        id: cache-ndi-linux
+        uses: actions/cache@v5
+        with:
+          path: ndi-sdk
+          key: ndi-sdk-linux-${{ env.NDI_SDK_VERSION }}
+
+      - name: Download and install NDI SDK (Linux)
+        if: runner.os == 'Linux' && steps.cache-ndi-linux.outputs.cache-hit != 'true'
+        run: |
+          curl -fsSL "${{ secrets.NDI_SDK_URL_LINUX }}" -o ndi-sdk-installer.tar.gz
+          tar -xzf ndi-sdk-installer.tar.gz
+          echo y | sh Install_NDI_SDK_v6_Linux.sh
+          mv "NDI SDK for Linux" ndi-sdk
+          rm ndi-sdk-installer.tar.gz Install_NDI_SDK_v6_Linux.sh
+
+      - name: Cache NDI SDK (macOS)
+        if: runner.os == 'macOS'
+        id: cache-ndi-macos
+        uses: actions/cache@v5
+        with:
+          path: ndi-sdk.pkg
+          key: ndi-sdk-macos-${{ env.NDI_SDK_VERSION }}
+
+      - name: Download NDI SDK (macOS)
+        if: runner.os == 'macOS' && steps.cache-ndi-macos.outputs.cache-hit != 'true'
+        run: curl -fsSL "${{ secrets.NDI_SDK_URL_MACOS }}" -o ndi-sdk.pkg
+
+      - name: Install NDI SDK (macOS)
+        if: runner.os == 'macOS'
+        run: sudo installer -pkg ndi-sdk.pkg -target /
+
+      - name: Cache NDI SDK (Windows)
+        if: runner.os == 'Windows'
+        id: cache-ndi-windows
+        uses: actions/cache@v5
+        with:
+          path: ndi-sdk.exe
+          key: ndi-sdk-windows-${{ env.NDI_SDK_VERSION }}
+
+      - name: Download NDI SDK (Windows)
+        if: runner.os == 'Windows' && steps.cache-ndi-windows.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: Invoke-WebRequest -Uri "${{ secrets.NDI_SDK_URL_WINDOWS }}" -OutFile ndi-sdk.exe
+
+      - name: Install NDI SDK (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Start-Process -FilePath ndi-sdk.exe -ArgumentList '/S' -Wait
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v3.4.1
+        env:
+          CIBW_ENVIRONMENT_LINUX: CMAKE_ARGS="-DNDI_SDK_DIR=/project/ndi-sdk"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wheels-${{ matrix.os }}
+          path: wheelhouse/*.whl
+
+  release:
+    name: Create GitHub Release
+    needs: build_wheels
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: wheels-*
+          path: wheelhouse
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: wheelhouse/*.whl
