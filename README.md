@@ -32,7 +32,7 @@ sudo systemctl enable --now avahi-daemon
 I've ported some examples to python.  
 You can try it by running the ndi-python examples.  
 ```
-git clone --recursive https://github.com/buresu/ndi-python.git
+git clone https://github.com/buresu/ndi-python.git
 cd ndi-python/example
 pip install -r requirements.txt
 python find.py
@@ -56,7 +56,7 @@ yay -S ndi-sdk
 ## Build
 
 ```
-git clone --recursive https://github.com/buresu/ndi-python.git
+git clone https://github.com/buresu/ndi-python.git
 cd ndi-python
 pip install .
 ```
@@ -70,14 +70,6 @@ To build for a specific Python version:
 ```
 CMAKE_ARGS="-DNDI_SDK_DIR=/path/to/ndisdk" /path/to/python3.12 -m pip install .
 ```
-
-### Build only CMake
-```
-git clone --recursive https://github.com/buresu/ndi-python.git
-mkdir build && cd build
-cmake /path/to/project -DNDI_SDK_DIR=/path/to/ndisdk
-cmake --build . --config Release
-```  
 
 ## License
 ndi-python is MIT License  
