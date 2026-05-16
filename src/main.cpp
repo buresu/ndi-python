@@ -1238,7 +1238,7 @@ PYBIND11_MODULE(NDIlib, m) {
       py::arg("instance"), py::arg("timeout_in_ms"));
 
   m.def(
-      "routing_get_source_name(",
+      "routing_get_source_name",
       [](py::capsule instance) {
         auto p_instance =
             static_cast<NDIlib_routing_instance_type *>(instance.get_pointer());
