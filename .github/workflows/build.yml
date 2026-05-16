@@ -100,3 +100,4 @@ jobs:
         uses: pypa/cibuildwheel@v3.4.1
         env:
           CIBW_ENVIRONMENT_LINUX: CMAKE_ARGS="-DNDI_SDK_DIR=/project/ndi-sdk"
+          CIBW_ENVIRONMENT_WINDOWS: CMAKE_ARGS="-DNDI_SDK_DIR=${{ env.NDI_SDK_DIR }}"
