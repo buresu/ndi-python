@@ -9,7 +9,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0")
 set(CMAKE_OSX_ARCHITECTURES "arm64")
 
-set(PYBIND11_FINDPYTHON ON)
+find_package(Python COMPONENTS Interpreter Development.Module REQUIRED)
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/lib/pybind11")
 
 find_package(NDI REQUIRED)
