@@ -5,7 +5,7 @@ import NDIlib as ndi
 
 def receive_loop(ndi_recv, source_name, stop_event):
     while not stop_event.is_set():
-        t, v, a, _ = ndi.recv_capture_v2(ndi_recv, 1000)
+        t, v, a, _ = ndi.recv_capture_v2(ndi_recv, 1000, want_metadata=False)
 
         if t == ndi.FRAME_TYPE_NONE:
             continue

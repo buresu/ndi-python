@@ -35,7 +35,7 @@ def main():
     cv.startWindowThread()
 
     while True:
-        t, v, _, _ = ndi.recv_capture_v2(ndi_recv, 5000)
+        t, v, _, _ = ndi.recv_capture_v2(ndi_recv, 5000, want_audio=False, want_metadata=False)
 
         if t == ndi.FRAME_TYPE_VIDEO:
             print('Video data received (%dx%d).' % (v.xres, v.yres))

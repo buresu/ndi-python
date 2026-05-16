@@ -1154,7 +1154,8 @@ PYBIND11_MODULE(NDIlib, m) {
 
   m.def(
       "recv_capture_v2",
-      [](py::capsule instance, uint32_t timeout_in_ms) {
+      [](py::capsule instance, uint32_t timeout_in_ms, bool want_video,
+         bool want_audio, bool want_metadata) {
         auto p_instance =
             static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
         NDIlib_video_frame_v2_t video_frame{};
@@ -1163,37 +1164,47 @@ PYBIND11_MODULE(NDIlib, m) {
         NDIlib_frame_type_e type;
         {
           py::gil_scoped_release release;
-          type = NDIlib_recv_capture_v2(p_instance, &video_frame, &audio_frame,
-                                        &metadata_frame, timeout_in_ms);
+          type = NDIlib_recv_capture_v2(
+              p_instance, want_video ? &video_frame : nullptr,
+              want_audio ? &audio_frame : nullptr,
+              want_metadata ? &metadata_frame : nullptr, timeout_in_ms);
         }
-        // Build wrapper objects that hold the NDI-allocated pointers.
-        // Callers must pass them back to recv_free_* before destroying.
-        VideoFrameV2Wrapper vw(
-            video_frame.xres, video_frame.yres, video_frame.FourCC,
-            video_frame.frame_rate_N, video_frame.frame_rate_D,
-            video_frame.picture_aspect_ratio, video_frame.frame_format_type,
-            video_frame.timecode, video_frame.line_stride_in_bytes,
-            video_frame.p_metadata, video_frame.timestamp);
-        vw.inner.p_data = video_frame.p_data;
-
-        AudioFrameV2Wrapper aw(audio_frame.sample_rate, audio_frame.no_channels,
-                               audio_frame.no_samples, audio_frame.timecode,
-                               audio_frame.channel_stride_in_bytes,
-                               audio_frame.p_metadata, audio_frame.timestamp);
-        aw.inner.p_data = audio_frame.p_data;
-
-        MetadataFrameWrapper mw(metadata_frame.length, metadata_frame.timecode,
-                                nullptr);
-        mw.inner.p_data = metadata_frame.p_data;
-
-        return py::make_tuple(type, std::move(vw), std::move(aw),
-                              std::move(mw));
+        py::object v = py::none(), a = py::none(), m_obj = py::none();
+        if (want_video && video_frame.p_data) {
+          VideoFrameV2Wrapper vw(
+              video_frame.xres, video_frame.yres, video_frame.FourCC,
+              video_frame.frame_rate_N, video_frame.frame_rate_D,
+              video_frame.picture_aspect_ratio, video_frame.frame_format_type,
+              video_frame.timecode, video_frame.line_stride_in_bytes,
+              video_frame.p_metadata, video_frame.timestamp);
+          vw.inner.p_data = video_frame.p_data;
+          v = py::cast(std::move(vw));
+        }
+        if (want_audio && audio_frame.p_data) {
+          AudioFrameV2Wrapper aw(audio_frame.sample_rate,
+                                 audio_frame.no_channels,
+                                 audio_frame.no_samples, audio_frame.timecode,
+                                 audio_frame.channel_stride_in_bytes,
+                                 audio_frame.p_metadata, audio_frame.timestamp);
+          aw.inner.p_data = audio_frame.p_data;
+          a = py::cast(std::move(aw));
+        }
+        if (want_metadata && metadata_frame.p_data) {
+          MetadataFrameWrapper mw(metadata_frame.length,
+                                  metadata_frame.timecode, nullptr);
+          mw.inner.p_data = metadata_frame.p_data;
+          m_obj = py::cast(std::move(mw));
+        }
+        return py::make_tuple(type, v, a, m_obj);
       },
-      py::arg("instance"), py::arg("timeout_in_ms"));
+      py::arg("instance"), py::arg("timeout_in_ms"),
+      py::arg("want_video") = true, py::arg("want_audio") = true,
+      py::arg("want_metadata") = true);
 
   m.def(
       "recv_capture_v3",
-      [](py::capsule instance, uint32_t timeout_in_ms) {
+      [](py::capsule instance, uint32_t timeout_in_ms, bool want_video,
+         bool want_audio, bool want_metadata) {
         auto p_instance =
             static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
         NDIlib_video_frame_v2_t video_frame{};
@@ -1202,32 +1213,42 @@ PYBIND11_MODULE(NDIlib, m) {
         NDIlib_frame_type_e type;
         {
           py::gil_scoped_release release;
-          type = NDIlib_recv_capture_v3(p_instance, &video_frame, &audio_frame,
-                                        &metadata_frame, timeout_in_ms);
+          type = NDIlib_recv_capture_v3(
+              p_instance, want_video ? &video_frame : nullptr,
+              want_audio ? &audio_frame : nullptr,
+              want_metadata ? &metadata_frame : nullptr, timeout_in_ms);
         }
-        VideoFrameV2Wrapper vw(
-            video_frame.xres, video_frame.yres, video_frame.FourCC,
-            video_frame.frame_rate_N, video_frame.frame_rate_D,
-            video_frame.picture_aspect_ratio, video_frame.frame_format_type,
-            video_frame.timecode, video_frame.line_stride_in_bytes,
-            video_frame.p_metadata, video_frame.timestamp);
-        vw.inner.p_data = video_frame.p_data;
-
-        AudioFrameV3Wrapper aw(audio_frame.sample_rate, audio_frame.no_channels,
-                               audio_frame.no_samples, audio_frame.timecode,
-                               audio_frame.FourCC,
-                               audio_frame.channel_stride_in_bytes,
-                               audio_frame.p_metadata, audio_frame.timestamp);
-        aw.inner.p_data = audio_frame.p_data;
-
-        MetadataFrameWrapper mw(metadata_frame.length, metadata_frame.timecode,
-                                nullptr);
-        mw.inner.p_data = metadata_frame.p_data;
-
-        return py::make_tuple(type, std::move(vw), std::move(aw),
-                              std::move(mw));
+        py::object v = py::none(), a = py::none(), m_obj = py::none();
+        if (want_video && video_frame.p_data) {
+          VideoFrameV2Wrapper vw(
+              video_frame.xres, video_frame.yres, video_frame.FourCC,
+              video_frame.frame_rate_N, video_frame.frame_rate_D,
+              video_frame.picture_aspect_ratio, video_frame.frame_format_type,
+              video_frame.timecode, video_frame.line_stride_in_bytes,
+              video_frame.p_metadata, video_frame.timestamp);
+          vw.inner.p_data = video_frame.p_data;
+          v = py::cast(std::move(vw));
+        }
+        if (want_audio && audio_frame.p_data) {
+          AudioFrameV3Wrapper aw(
+              audio_frame.sample_rate, audio_frame.no_channels,
+              audio_frame.no_samples, audio_frame.timecode, audio_frame.FourCC,
+              audio_frame.channel_stride_in_bytes, audio_frame.p_metadata,
+              audio_frame.timestamp);
+          aw.inner.p_data = audio_frame.p_data;
+          a = py::cast(std::move(aw));
+        }
+        if (want_metadata && metadata_frame.p_data) {
+          MetadataFrameWrapper mw(metadata_frame.length,
+                                  metadata_frame.timecode, nullptr);
+          mw.inner.p_data = metadata_frame.p_data;
+          m_obj = py::cast(std::move(mw));
+        }
+        return py::make_tuple(type, v, a, m_obj);
       },
-      py::arg("instance"), py::arg("timeout_in_ms"));
+      py::arg("instance"), py::arg("timeout_in_ms"),
+      py::arg("want_video") = true, py::arg("want_audio") = true,
+      py::arg("want_metadata") = true);
 
   m.def(
       "recv_free_video_v2",

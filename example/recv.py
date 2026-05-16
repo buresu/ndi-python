@@ -32,7 +32,7 @@ def main():
     ndi.find_destroy(ndi_find)
 
     while True:
-        t, v, a, _ = ndi.recv_capture_v2(ndi_recv, 5000)
+        t, v, a, _ = ndi.recv_capture_v2(ndi_recv, 5000, want_metadata=False)
 
         if t == ndi.FRAME_TYPE_NONE:
             print('No data received.')

@@ -52,7 +52,7 @@ def main():
 
     start = time.time()
     while time.time() - start < 1.0 * 30:
-        t, v, a, _ = ndi.recv_capture_v2(ndi_recv, 5000)
+        t, v, a, _ = ndi.recv_capture_v2(ndi_recv, 5000, want_metadata=False)
 
         if t == ndi.FRAME_TYPE_VIDEO:
             print('Video data received (%dx%d).' % (v.xres, v.yres))
