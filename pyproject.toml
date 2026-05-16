@@ -49,6 +49,7 @@ skip = ["*-musllinux*", "*-win32", "*-manylinux_i686"]
 
 [tool.cibuildwheel.linux]
 archs = ["x86_64", "aarch64"]
+repair-wheel-command = "auditwheel repair --exclude libavahi-common.so.3 --exclude libavahi-client.so.3 -w {dest_dir} {wheel}"
 
 [tool.cibuildwheel.macos]
 archs = ["arm64"]
