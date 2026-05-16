@@ -63,7 +63,7 @@ pip install .
 
 If you need to set the NDI SDK directory explicitly:
 ```
-env CMAKE_ARGS="-DNDI_SDK_DIR=/path/to/ndisdk" pip install .
+CMAKE_ARGS="-DNDI_SDK_DIR=/path/to/ndisdk" pip install .
 ```
 
 To build for a specific Python version:
