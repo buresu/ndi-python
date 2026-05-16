@@ -65,18 +65,30 @@ jobs:
         id: cache-ndi-windows
         uses: actions/cache@v5
         with:
-          path: ndi-sdk.exe
+          path: ndi-sdk-win
           key: ndi-sdk-windows-${{ env.NDI_SDK_VERSION }}
 
-      - name: Download NDI SDK (Windows)
+      - name: Install innoextract (Windows)
+        if: runner.os == 'Windows' && steps.cache-ndi-windows.outputs.cache-hit != 'true'
+        uses: MinoruSekine/setup-scoop@v4
+        with:
+          apps: innoextract
+
+      - name: Download and extract NDI SDK (Windows)
         if: runner.os == 'Windows' && steps.cache-ndi-windows.outputs.cache-hit != 'true'
         shell: pwsh
-        run: Invoke-WebRequest -Uri "${{ secrets.NDI_SDK_URL_WINDOWS }}" -OutFile ndi-sdk.exe
+        run: |
+          Invoke-WebRequest -Uri "${{ secrets.NDI_SDK_URL_WINDOWS }}" -OutFile ndi-sdk.exe
+          innoextract ndi-sdk.exe --output-dir ndi-sdk-win
+          Remove-Item ndi-sdk.exe
 
-      - name: Install NDI SDK (Windows)
+      - name: Set NDI_SDK_DIR (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: Start-Process -FilePath ndi-sdk.exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait
+        run: |
+          $src = Get-ChildItem "ndi-sdk-win" -Recurse -Filter "Processing.NDI.Lib.h" | Select-Object -First 1
+          $sdkDir = $src.DirectoryInfo.Parent.FullName
+          echo "NDI_SDK_DIR=$sdkDir" >> $env:GITHUB_ENV
 
       - name: Build wheels
         uses: pypa/cibuildwheel@v3.4.1
