@@ -6,6 +6,10 @@ on:
     branches: [master]
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   NDI_SDK_VERSION: "6.3.2.0"
 
@@ -96,5 +100,6 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v3.4.1
         env:
+          CIBW_BUILD: "cp310-* cp314-*"
           CIBW_ENVIRONMENT_LINUX: CMAKE_ARGS="-DNDI_SDK_DIR=/project/ndi-sdk"
           CIBW_ENVIRONMENT_WINDOWS: CMAKE_ARGS="-DNDI_SDK_DIR=${{ env.NDI_SDK_DIR }}"
