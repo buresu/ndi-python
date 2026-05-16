@@ -33,6 +33,7 @@ def main():
     ndi.find_destroy(ndi_find)
 
     cv.startWindowThread()
+    cv.namedWindow('ndi image', cv.WINDOW_NORMAL)
 
     while True:
         t, v, _, _ = ndi.recv_capture_v2(ndi_recv, 5000, want_audio=False, want_metadata=False)
