@@ -24,7 +24,7 @@ def main():
     audio_frame.no_samples = 1920
 
     for i in range(1000):
-        audio_frame.data = np.zeros((4, 1920), dtype=np.float)
+        audio_frame.data = np.zeros((4, 1920), dtype=np.float32)
         ndi.send_send_audio_v2(ndi_send, audio_frame)
         print('Frame number %d sent.' % i)
 
