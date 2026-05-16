@@ -4,7 +4,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "ndi-python"
-version = "6.3.2.0"
+version = "6.3.2.1"
 description = "Wrapper package for NDI SDK python bindings."
 readme = "README.md"
 license = { text = "MIT" }
