@@ -286,66 +286,94 @@ PYBIND11_MODULE(NDIlib, m) {
       .export_values();
 
   py::class_<NDIlib_listener_event>(m, "ListenerEvent")
-      .def_property_readonly("uuid", [](const NDIlib_listener_event &s) {
-        return s.p_uuid ? std::string(s.p_uuid) : std::string();
-      })
-      .def_property_readonly("name", [](const NDIlib_listener_event &s) {
-        return s.p_name ? std::string(s.p_name) : std::string();
-      })
+      .def_property_readonly("uuid",
+                             [](const NDIlib_listener_event &s) {
+                               return s.p_uuid ? std::string(s.p_uuid)
+                                               : std::string();
+                             })
+      .def_property_readonly("name",
+                             [](const NDIlib_listener_event &s) {
+                               return s.p_name ? std::string(s.p_name)
+                                               : std::string();
+                             })
       .def_property_readonly("value", [](const NDIlib_listener_event &s) {
         return s.p_value ? std::string(s.p_value) : std::string();
       });
 
   py::class_<NDIlib_receiver_t>(m, "Receiver")
-      .def_property_readonly("uuid", [](const NDIlib_receiver_t &s) {
-        return s.p_uuid ? std::string(s.p_uuid) : std::string();
-      })
-      .def_property_readonly("name", [](const NDIlib_receiver_t &s) {
-        return s.p_name ? std::string(s.p_name) : std::string();
-      })
-      .def_property_readonly("input_uuid", [](const NDIlib_receiver_t &s) {
-        return s.p_input_uuid ? std::string(s.p_input_uuid) : std::string();
-      })
-      .def_property_readonly("input_name", [](const NDIlib_receiver_t &s) {
-        return s.p_input_name ? std::string(s.p_input_name) : std::string();
-      })
-      .def_property_readonly("address", [](const NDIlib_receiver_t &s) {
-        return s.p_address ? std::string(s.p_address) : std::string();
-      })
-      .def_property_readonly("streams", [](const NDIlib_receiver_t &s) {
-        std::vector<NDIlib_receiver_type_e> result;
-        for (uint32_t i = 0; i < s.num_streams; ++i)
-          result.push_back(s.p_streams[i]);
-        return result;
-      })
-      .def_property_readonly("commands", [](const NDIlib_receiver_t &s) {
-        std::vector<NDIlib_receiver_command_e> result;
-        for (uint32_t i = 0; i < s.num_commands; ++i)
-          result.push_back(s.p_commands[i]);
-        return result;
-      })
+      .def_property_readonly("uuid",
+                             [](const NDIlib_receiver_t &s) {
+                               return s.p_uuid ? std::string(s.p_uuid)
+                                               : std::string();
+                             })
+      .def_property_readonly("name",
+                             [](const NDIlib_receiver_t &s) {
+                               return s.p_name ? std::string(s.p_name)
+                                               : std::string();
+                             })
+      .def_property_readonly("input_uuid",
+                             [](const NDIlib_receiver_t &s) {
+                               return s.p_input_uuid
+                                          ? std::string(s.p_input_uuid)
+                                          : std::string();
+                             })
+      .def_property_readonly("input_name",
+                             [](const NDIlib_receiver_t &s) {
+                               return s.p_input_name
+                                          ? std::string(s.p_input_name)
+                                          : std::string();
+                             })
+      .def_property_readonly("address",
+                             [](const NDIlib_receiver_t &s) {
+                               return s.p_address ? std::string(s.p_address)
+                                                  : std::string();
+                             })
+      .def_property_readonly("streams",
+                             [](const NDIlib_receiver_t &s) {
+                               std::vector<NDIlib_receiver_type_e> result;
+                               for (uint32_t i = 0; i < s.num_streams; ++i)
+                                 result.push_back(s.p_streams[i]);
+                               return result;
+                             })
+      .def_property_readonly("commands",
+                             [](const NDIlib_receiver_t &s) {
+                               std::vector<NDIlib_receiver_command_e> result;
+                               for (uint32_t i = 0; i < s.num_commands; ++i)
+                                 result.push_back(s.p_commands[i]);
+                               return result;
+                             })
       .def_readonly("events_subscribed", &NDIlib_receiver_t::events_subscribed);
 
   py::class_<NDIlib_sender_t>(m, "Sender")
-      .def_property_readonly("uuid", [](const NDIlib_sender_t &s) {
-        return s.p_uuid ? std::string(s.p_uuid) : std::string();
-      })
-      .def_property_readonly("name", [](const NDIlib_sender_t &s) {
-        return s.p_name ? std::string(s.p_name) : std::string();
-      })
-      .def_property_readonly("metadata", [](const NDIlib_sender_t &s) {
-        return s.p_metadata ? std::string(s.p_metadata) : std::string();
-      })
-      .def_property_readonly("address", [](const NDIlib_sender_t &s) {
-        return s.p_address ? std::string(s.p_address) : std::string();
-      })
+      .def_property_readonly("uuid",
+                             [](const NDIlib_sender_t &s) {
+                               return s.p_uuid ? std::string(s.p_uuid)
+                                               : std::string();
+                             })
+      .def_property_readonly("name",
+                             [](const NDIlib_sender_t &s) {
+                               return s.p_name ? std::string(s.p_name)
+                                               : std::string();
+                             })
+      .def_property_readonly("metadata",
+                             [](const NDIlib_sender_t &s) {
+                               return s.p_metadata ? std::string(s.p_metadata)
+                                                   : std::string();
+                             })
+      .def_property_readonly("address",
+                             [](const NDIlib_sender_t &s) {
+                               return s.p_address ? std::string(s.p_address)
+                                                  : std::string();
+                             })
       .def_readonly("port", &NDIlib_sender_t::port)
-      .def_property_readonly("groups", [](const NDIlib_sender_t &s) {
-        std::vector<std::string> result;
-        for (uint32_t i = 0; i < s.num_groups; ++i)
-          if (s.p_groups[i]) result.push_back(s.p_groups[i]);
-        return result;
-      })
+      .def_property_readonly("groups",
+                             [](const NDIlib_sender_t &s) {
+                               std::vector<std::string> result;
+                               for (uint32_t i = 0; i < s.num_groups; ++i)
+                                 if (s.p_groups[i])
+                                   result.push_back(s.p_groups[i]);
+                               return result;
+                             })
       .def_readonly("events_subscribed", &NDIlib_sender_t::events_subscribed);
 
   // Processing.NDI.Lib
@@ -539,8 +567,8 @@ PYBIND11_MODULE(NDIlib, m) {
             static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
         const char *p_source_name = nullptr;
         py::gil_scoped_release release;
-        bool result =
-            NDIlib_recv_get_source_name(p_instance, &p_source_name, timeout_in_ms);
+        bool result = NDIlib_recv_get_source_name(p_instance, &p_source_name,
+                                                  timeout_in_ms);
         py::gil_scoped_acquire acquire;
         if (result && p_source_name)
           return py::str(p_source_name);
@@ -1521,7 +1549,8 @@ PYBIND11_MODULE(NDIlib, m) {
       .def_property(
           "url_address",
           [](const NDIlib_recv_listener_create_t &s) {
-            return s.p_url_address ? std::string(s.p_url_address) : std::string();
+            return s.p_url_address ? std::string(s.p_url_address)
+                                   : std::string();
           },
           [](NDIlib_recv_listener_create_t &, const std::string &) {});
 
@@ -1540,7 +1569,8 @@ PYBIND11_MODULE(NDIlib, m) {
       "recv_listener_destroy",
       [](py::capsule instance) {
         NDIlib_recv_listener_destroy(
-            static_cast<NDIlib_recv_listener_instance_t>(instance.get_pointer()));
+            static_cast<NDIlib_recv_listener_instance_t>(
+                instance.get_pointer()));
       },
       py::arg("instance"));
 
@@ -1548,7 +1578,8 @@ PYBIND11_MODULE(NDIlib, m) {
       "recv_listener_is_connected",
       [](py::capsule instance) {
         return NDIlib_recv_listener_is_connected(
-            static_cast<NDIlib_recv_listener_instance_t>(instance.get_pointer()));
+            static_cast<NDIlib_recv_listener_instance_t>(
+                instance.get_pointer()));
       },
       py::arg("instance"));
 
@@ -1556,8 +1587,10 @@ PYBIND11_MODULE(NDIlib, m) {
       "recv_listener_get_server_url",
       [](py::capsule instance) -> py::object {
         auto url = NDIlib_recv_listener_get_server_url(
-            static_cast<NDIlib_recv_listener_instance_t>(instance.get_pointer()));
-        if (url) return py::str(url);
+            static_cast<NDIlib_recv_listener_instance_t>(
+                instance.get_pointer()));
+        if (url)
+          return py::str(url);
         return py::none();
       },
       py::arg("instance"));
@@ -1567,10 +1600,12 @@ PYBIND11_MODULE(NDIlib, m) {
       [](py::capsule instance) {
         uint32_t num = 0;
         auto p = NDIlib_recv_listener_get_receivers(
-            static_cast<NDIlib_recv_listener_instance_t>(instance.get_pointer()),
+            static_cast<NDIlib_recv_listener_instance_t>(
+                instance.get_pointer()),
             &num);
         std::vector<NDIlib_receiver_t> result;
-        for (uint32_t i = 0; i < num; ++i) result.push_back(p[i]);
+        for (uint32_t i = 0; i < num; ++i)
+          result.push_back(p[i]);
         return result;
       },
       py::arg("instance"));
@@ -1580,7 +1615,8 @@ PYBIND11_MODULE(NDIlib, m) {
       [](py::capsule instance, uint32_t timeout_in_ms) {
         py::gil_scoped_release release;
         return NDIlib_recv_listener_wait_for_receivers(
-            static_cast<NDIlib_recv_listener_instance_t>(instance.get_pointer()),
+            static_cast<NDIlib_recv_listener_instance_t>(
+                instance.get_pointer()),
             timeout_in_ms);
       },
       py::arg("instance"), py::arg("timeout_in_ms"));
@@ -1589,7 +1625,8 @@ PYBIND11_MODULE(NDIlib, m) {
       "recv_listener_subscribe_events",
       [](py::capsule instance, const std::string &uuid) {
         NDIlib_recv_listener_subscribe_events(
-            static_cast<NDIlib_recv_listener_instance_t>(instance.get_pointer()),
+            static_cast<NDIlib_recv_listener_instance_t>(
+                instance.get_pointer()),
             uuid.c_str());
       },
       py::arg("instance"), py::arg("receiver_uuid"));
@@ -1598,7 +1635,8 @@ PYBIND11_MODULE(NDIlib, m) {
       "recv_listener_unsubscribe_events",
       [](py::capsule instance, const std::string &uuid) {
         NDIlib_recv_listener_unsubscribe_events(
-            static_cast<NDIlib_recv_listener_instance_t>(instance.get_pointer()),
+            static_cast<NDIlib_recv_listener_instance_t>(
+                instance.get_pointer()),
             uuid.c_str());
       },
       py::arg("instance"), py::arg("receiver_uuid"));
@@ -1608,13 +1646,16 @@ PYBIND11_MODULE(NDIlib, m) {
       [](py::capsule instance, uint32_t timeout_in_ms) {
         uint32_t num = 0;
         auto p = NDIlib_recv_listener_get_events(
-            static_cast<NDIlib_recv_listener_instance_t>(instance.get_pointer()),
+            static_cast<NDIlib_recv_listener_instance_t>(
+                instance.get_pointer()),
             &num, timeout_in_ms);
         std::vector<NDIlib_listener_event> result;
         if (p) {
-          for (uint32_t i = 0; i < num; ++i) result.push_back(p[i]);
+          for (uint32_t i = 0; i < num; ++i)
+            result.push_back(p[i]);
           NDIlib_recv_listener_free_events(
-              static_cast<NDIlib_recv_listener_instance_t>(instance.get_pointer()),
+              static_cast<NDIlib_recv_listener_instance_t>(
+                  instance.get_pointer()),
               p);
         }
         return result;
@@ -1632,7 +1673,8 @@ PYBIND11_MODULE(NDIlib, m) {
           src = src_str.c_str();
         }
         return NDIlib_recv_listener_send_connect(
-            static_cast<NDIlib_recv_listener_instance_t>(instance.get_pointer()),
+            static_cast<NDIlib_recv_listener_instance_t>(
+                instance.get_pointer()),
             receiver_uuid.c_str(), src);
       },
       py::arg("instance"), py::arg("receiver_uuid"),
@@ -1651,7 +1693,8 @@ PYBIND11_MODULE(NDIlib, m) {
       .def_property(
           "url_address",
           [](const NDIlib_send_listener_create_t &s) {
-            return s.p_url_address ? std::string(s.p_url_address) : std::string();
+            return s.p_url_address ? std::string(s.p_url_address)
+                                   : std::string();
           },
           [](NDIlib_send_listener_create_t &, const std::string &) {});
 
@@ -1670,7 +1713,8 @@ PYBIND11_MODULE(NDIlib, m) {
       "send_listener_destroy",
       [](py::capsule instance) {
         NDIlib_send_listener_destroy(
-            static_cast<NDIlib_send_listener_instance_t>(instance.get_pointer()));
+            static_cast<NDIlib_send_listener_instance_t>(
+                instance.get_pointer()));
       },
       py::arg("instance"));
 
@@ -1678,7 +1722,8 @@ PYBIND11_MODULE(NDIlib, m) {
       "send_listener_is_connected",
       [](py::capsule instance) {
         return NDIlib_send_listener_is_connected(
-            static_cast<NDIlib_send_listener_instance_t>(instance.get_pointer()));
+            static_cast<NDIlib_send_listener_instance_t>(
+                instance.get_pointer()));
       },
       py::arg("instance"));
 
@@ -1686,8 +1731,10 @@ PYBIND11_MODULE(NDIlib, m) {
       "send_listener_get_server_url",
       [](py::capsule instance) -> py::object {
         auto url = NDIlib_send_listener_get_server_url(
-            static_cast<NDIlib_send_listener_instance_t>(instance.get_pointer()));
-        if (url) return py::str(url);
+            static_cast<NDIlib_send_listener_instance_t>(
+                instance.get_pointer()));
+        if (url)
+          return py::str(url);
         return py::none();
       },
       py::arg("instance"));
@@ -1697,10 +1744,12 @@ PYBIND11_MODULE(NDIlib, m) {
       [](py::capsule instance) {
         uint32_t num = 0;
         auto p = NDIlib_send_listener_get_senders(
-            static_cast<NDIlib_send_listener_instance_t>(instance.get_pointer()),
+            static_cast<NDIlib_send_listener_instance_t>(
+                instance.get_pointer()),
             &num);
         std::vector<NDIlib_sender_t> result;
-        for (uint32_t i = 0; i < num; ++i) result.push_back(p[i]);
+        for (uint32_t i = 0; i < num; ++i)
+          result.push_back(p[i]);
         return result;
       },
       py::arg("instance"));
@@ -1710,7 +1759,8 @@ PYBIND11_MODULE(NDIlib, m) {
       [](py::capsule instance, uint32_t timeout_in_ms) {
         py::gil_scoped_release release;
         return NDIlib_send_listener_wait_for_senders(
-            static_cast<NDIlib_send_listener_instance_t>(instance.get_pointer()),
+            static_cast<NDIlib_send_listener_instance_t>(
+                instance.get_pointer()),
             timeout_in_ms);
       },
       py::arg("instance"), py::arg("timeout_in_ms"));
@@ -1719,7 +1769,8 @@ PYBIND11_MODULE(NDIlib, m) {
       "send_listener_subscribe_events",
       [](py::capsule instance, const std::string &uuid) {
         NDIlib_send_listener_subscribe_events(
-            static_cast<NDIlib_send_listener_instance_t>(instance.get_pointer()),
+            static_cast<NDIlib_send_listener_instance_t>(
+                instance.get_pointer()),
             uuid.c_str());
       },
       py::arg("instance"), py::arg("sender_uuid"));
@@ -1728,7 +1779,8 @@ PYBIND11_MODULE(NDIlib, m) {
       "send_listener_unsubscribe_events",
       [](py::capsule instance, const std::string &uuid) {
         NDIlib_send_listener_unsubscribe_events(
-            static_cast<NDIlib_send_listener_instance_t>(instance.get_pointer()),
+            static_cast<NDIlib_send_listener_instance_t>(
+                instance.get_pointer()),
             uuid.c_str());
       },
       py::arg("instance"), py::arg("sender_uuid"));
@@ -1738,13 +1790,16 @@ PYBIND11_MODULE(NDIlib, m) {
       [](py::capsule instance, uint32_t timeout_in_ms) {
         uint32_t num = 0;
         auto p = NDIlib_send_listener_get_events(
-            static_cast<NDIlib_send_listener_instance_t>(instance.get_pointer()),
+            static_cast<NDIlib_send_listener_instance_t>(
+                instance.get_pointer()),
             &num, timeout_in_ms);
         std::vector<NDIlib_listener_event> result;
         if (p) {
-          for (uint32_t i = 0; i < num; ++i) result.push_back(p[i]);
+          for (uint32_t i = 0; i < num; ++i)
+            result.push_back(p[i]);
           NDIlib_send_listener_free_events(
-              static_cast<NDIlib_send_listener_instance_t>(instance.get_pointer()),
+              static_cast<NDIlib_send_listener_instance_t>(
+                  instance.get_pointer()),
               p);
         }
         return result;
@@ -1764,7 +1819,8 @@ PYBIND11_MODULE(NDIlib, m) {
       .def_property(
           "url_address",
           [](const NDIlib_recv_advertiser_create_t &s) {
-            return s.p_url_address ? std::string(s.p_url_address) : std::string();
+            return s.p_url_address ? std::string(s.p_url_address)
+                                   : std::string();
           },
           [](NDIlib_recv_advertiser_create_t &, const std::string &) {});
 
@@ -1783,15 +1839,15 @@ PYBIND11_MODULE(NDIlib, m) {
       "recv_advertiser_destroy",
       [](py::capsule instance) {
         NDIlib_recv_advertiser_destroy(
-            static_cast<NDIlib_recv_advertiser_instance_t>(instance.get_pointer()));
+            static_cast<NDIlib_recv_advertiser_instance_t>(
+                instance.get_pointer()));
       },
       py::arg("instance"));
 
   m.def(
       "recv_advertiser_add_receiver",
-      [](py::capsule advertiser, py::capsule receiver,
-         bool allow_controlling, bool allow_monitoring,
-         py::object input_group_name) {
+      [](py::capsule advertiser, py::capsule receiver, bool allow_controlling,
+         bool allow_monitoring, py::object input_group_name) {
         const char *name = nullptr;
         std::string name_str;
         if (!input_group_name.is_none()) {
@@ -1799,7 +1855,8 @@ PYBIND11_MODULE(NDIlib, m) {
           name = name_str.c_str();
         }
         return NDIlib_recv_advertiser_add_receiver(
-            static_cast<NDIlib_recv_advertiser_instance_t>(advertiser.get_pointer()),
+            static_cast<NDIlib_recv_advertiser_instance_t>(
+                advertiser.get_pointer()),
             static_cast<NDIlib_recv_instance_t>(receiver.get_pointer()),
             allow_controlling, allow_monitoring, name);
       },
@@ -1811,7 +1868,8 @@ PYBIND11_MODULE(NDIlib, m) {
       "recv_advertiser_del_receiver",
       [](py::capsule advertiser, py::capsule receiver) {
         return NDIlib_recv_advertiser_del_receiver(
-            static_cast<NDIlib_recv_advertiser_instance_t>(advertiser.get_pointer()),
+            static_cast<NDIlib_recv_advertiser_instance_t>(
+                advertiser.get_pointer()),
             static_cast<NDIlib_recv_instance_t>(receiver.get_pointer()));
       },
       py::arg("advertiser"), py::arg("receiver"));
@@ -1829,7 +1887,8 @@ PYBIND11_MODULE(NDIlib, m) {
       .def_property(
           "url_address",
           [](const NDIlib_send_advertiser_create_t &s) {
-            return s.p_url_address ? std::string(s.p_url_address) : std::string();
+            return s.p_url_address ? std::string(s.p_url_address)
+                                   : std::string();
           },
           [](NDIlib_send_advertiser_create_t &, const std::string &) {});
 
@@ -1848,7 +1907,8 @@ PYBIND11_MODULE(NDIlib, m) {
       "send_advertiser_destroy",
       [](py::capsule instance) {
         NDIlib_send_advertiser_destroy(
-            static_cast<NDIlib_send_advertiser_instance_t>(instance.get_pointer()));
+            static_cast<NDIlib_send_advertiser_instance_t>(
+                instance.get_pointer()));
       },
       py::arg("instance"));
 
@@ -1856,7 +1916,8 @@ PYBIND11_MODULE(NDIlib, m) {
       "send_advertiser_add_sender",
       [](py::capsule advertiser, py::capsule sender, bool allow_monitoring) {
         return NDIlib_send_advertiser_add_sender(
-            static_cast<NDIlib_send_advertiser_instance_t>(advertiser.get_pointer()),
+            static_cast<NDIlib_send_advertiser_instance_t>(
+                advertiser.get_pointer()),
             static_cast<NDIlib_send_instance_t>(sender.get_pointer()),
             allow_monitoring);
       },
@@ -1867,7 +1928,8 @@ PYBIND11_MODULE(NDIlib, m) {
       "send_advertiser_del_sender",
       [](py::capsule advertiser, py::capsule sender) {
         return NDIlib_send_advertiser_del_sender(
-            static_cast<NDIlib_send_advertiser_instance_t>(advertiser.get_pointer()),
+            static_cast<NDIlib_send_advertiser_instance_t>(
+                advertiser.get_pointer()),
             static_cast<NDIlib_send_instance_t>(sender.get_pointer()));
       },
       py::arg("advertiser"), py::arg("sender"));
