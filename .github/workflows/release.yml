@@ -76,7 +76,7 @@ jobs:
       - name: Install NDI SDK (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: Start-Process -FilePath ndi-sdk.exe -ArgumentList '/S' -Wait
+        run: Start-Process -FilePath ndi-sdk.exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait
 
       - name: Build wheels
         uses: pypa/cibuildwheel@v3.4.1
