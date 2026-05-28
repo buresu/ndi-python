@@ -45,10 +45,10 @@ Please install a compatible FFmpeg version that matches the version required by 
 
 You can check which FFmpeg version is required with a command similar to the following:  
 ```
-strings /usr/lib/libndi.so | grep libavcodec
+strings /path/to/ndilib/libndi.so | grep libavcodec
 out: libavcodec.so.61
 ```
-In this example, libavcodec.so.61 corresponds to FFmpeg 7.x.
+In this case, libavcodec.so.61 corresponds to FFmpeg 7.x.
 
 ## Development
 
