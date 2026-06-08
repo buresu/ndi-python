@@ -10,8 +10,7 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0")
 set(CMAKE_OSX_ARCHITECTURES "arm64")
 
 set(PYBIND11_FINDPYTHON ON)
-find_package(Python REQUIRED COMPONENTS Interpreter Development.Module
-             OPTIONAL_COMPONENTS Development.Embed)
+find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
 if(NOT TARGET Python::Python)
   add_library(Python::Python INTERFACE IMPORTED)
 endif()
@@ -24,11 +23,11 @@ file(GLOB SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 
 source_group("" FILES ${SOURCES} ${INCLUDES})
 
-pybind11_add_module(NDIlib SHARED ${INCLUDES} ${SOURCES})
+pybind11_add_module(NDIlib MODULE ${INCLUDES} ${SOURCES})
 
 target_include_directories(NDIlib PRIVATE ${NDI_INCLUDE_DIR})
 target_link_directories(NDIlib PRIVATE ${NDI_LIBRARY_DIR})
-target_link_libraries(NDIlib PRIVATE pybind11::module ${NDI_LIBS})
+target_link_libraries(NDIlib PRIVATE ${NDI_LIBS})
 
 set_target_properties(NDIlib PROPERTIES SKIP_RPATH TRUE)
 set_target_properties(NDIlib PROPERTIES BUILD_RPATH_USE_ORIGIN TRUE)
