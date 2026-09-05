@@ -265,10 +265,10 @@ struct AudioFrameV3Wrapper {
     if (!inner.p_data)
       return py::array_t<uint8_t>();
     size_t col = inner.no_samples, row = inner.no_channels,
-           size = sizeof(uint8_t);
+           size = sizeof(float);
     return py::array(py::buffer_info(inner.p_data, size,
                                      py::format_descriptor<float>::format(),
-                                     2, {row, col}, {col * size, size})));
+                                     2, {row, col}, {col * size, size}));
   }
 };
 
