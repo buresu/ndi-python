@@ -829,7 +829,7 @@ PYBIND11_MODULE(NDIlib, m) {
           [](AudioFrameV3Wrapper &s, NDIlib_FourCC_audio_type_e v) {
             s.inner.FourCC = v;
           })
-.def_property(
+      .def_property(
            "data", [](const AudioFrameV3Wrapper &s) { return s.get_data(); },
            [](AudioFrameV3Wrapper &s, py::array_t<float> arr) {
              s.set_data(std::move(arr));
