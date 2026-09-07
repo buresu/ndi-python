@@ -50,7 +50,7 @@ def main():
 
         if t == ndi.FRAME_TYPE_AUDIO:
             print('Audio data received (%d samples).' % a.no_samples)
-            data = np.zeros((a.no_channels, a.no_samples), np.int16)
+            data = np.zeros((a.no_samples, a.no_channels), np.int16)
             audio_frame_16bpp_interleaved = ndi.AudioFrameInterleaved16s()
             audio_frame_16bpp_interleaved.reference_level = 20
             audio_frame_16bpp_interleaved.data = data

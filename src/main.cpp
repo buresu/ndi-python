@@ -449,13 +449,14 @@ struct AudioFrameInterleaved16sWrapper {
     data_array = std::move(arr);
     auto info = data_array.request();
     inner.p_data = static_cast<int16_t *>(info.ptr);
-    inner.no_channels = info.shape[0];
-    inner.no_samples = info.shape[1];
+    inner.no_samples = info.shape[0];
+    inner.no_channels = info.shape[1];
   }
   py::array get_data() const {
     if (!inner.p_data)
       return py::array_t<int16_t>();
-    size_t col = inner.no_samples, row = inner.no_channels,
+    // Interleaved layout: samples are the outer axis, channels the inner one.
+    size_t row = inner.no_samples, col = inner.no_channels,
            size = sizeof(int16_t);
     return py::array(py::buffer_info(inner.p_data, size,
                                      py::format_descriptor<int16_t>::format(),
@@ -481,13 +482,14 @@ struct AudioFrameInterleaved32sWrapper {
     data_array = std::move(arr);
     auto info = data_array.request();
     inner.p_data = static_cast<int32_t *>(info.ptr);
-    inner.no_channels = info.shape[0];
-    inner.no_samples = info.shape[1];
+    inner.no_samples = info.shape[0];
+    inner.no_channels = info.shape[1];
   }
   py::array get_data() const {
     if (!inner.p_data)
       return py::array_t<int32_t>();
-    size_t col = inner.no_samples, row = inner.no_channels,
+    // Interleaved layout: samples are the outer axis, channels the inner one.
+    size_t row = inner.no_samples, col = inner.no_channels,
            size = sizeof(int32_t);
     return py::array(py::buffer_info(inner.p_data, size,
                                      py::format_descriptor<int32_t>::format(),
@@ -511,13 +513,14 @@ struct AudioFrameInterleaved32fWrapper {
     data_array = std::move(arr);
     auto info = data_array.request();
     inner.p_data = static_cast<float *>(info.ptr);
-    inner.no_channels = info.shape[0];
-    inner.no_samples = info.shape[1];
+    inner.no_samples = info.shape[0];
+    inner.no_channels = info.shape[1];
   }
   py::array get_data() const {
     if (!inner.p_data)
       return py::array_t<float>();
-    size_t col = inner.no_samples, row = inner.no_channels,
+    // Interleaved layout: samples are the outer axis, channels the inner one.
+    size_t row = inner.no_samples, col = inner.no_channels,
            size = sizeof(float);
     return py::array(py::buffer_info(inner.p_data, size,
                                      py::format_descriptor<float>::format(), 2,
