@@ -256,10 +256,10 @@ struct AudioFrameV3Wrapper {
   void set_data(py::array_t<float> arr) {
     data_array = std::move(arr);
     auto info = data_array.request();
-    inner.p_data = static_cast<float *>(info.ptr);
+    inner.p_data = static_cast<uint8_t *>(info.ptr);
     inner.no_channels = info.shape[0];
     inner.no_samples = info.shape[1];
-    inner.channel_stride_in_bytes = info.strides[0];
+    inner.channel_stride_in_bytes = static_cast<int>(info.strides[0]);
   }
   py::array get_data() const {
     if (!inner.p_data)
