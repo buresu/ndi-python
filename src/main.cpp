@@ -845,10 +845,10 @@ PYBIND11_MODULE(NDIlib, m) {
             s.inner.FourCC = v;
           })
       .def_property(
-           "data", [](const AudioFrameV3Wrapper &s) { return s.get_data(); },
-           [](AudioFrameV3Wrapper &s, py::array_t<float> arr) {
-             s.set_data(std::move(arr));
-           })
+          "data", [](const AudioFrameV3Wrapper &s) { return s.get_data(); },
+          [](AudioFrameV3Wrapper &s, py::array_t<float> arr) {
+            s.set_data(std::move(arr));
+          })
       .def_property(
           "channel_stride_in_bytes",
           [](const AudioFrameV3Wrapper &s) {
