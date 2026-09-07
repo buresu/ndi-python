@@ -206,7 +206,7 @@ struct AudioFrameV2Wrapper {
 
 struct AudioFrameV3Wrapper {
   std::string metadata_str;
-  py::array_t<uint8_t> data_array;
+  py::array_t<float> data_array;
   NDIlib_audio_frame_v3_t inner{};
 
   AudioFrameV3Wrapper(int sample_rate, int no_channels, int no_samples,
@@ -253,22 +253,22 @@ struct AudioFrameV3Wrapper {
     metadata_str = s;
     inner.p_metadata = metadata_str.c_str();
   }
-  void set_data(py::array_t<uint8_t> arr) {
+  void set_data(py::array_t<float> arr) {
     data_array = std::move(arr);
     auto info = data_array.request();
     inner.p_data = static_cast<uint8_t *>(info.ptr);
     inner.no_channels = info.shape[0];
     inner.no_samples = info.shape[1];
-    inner.channel_stride_in_bytes = info.strides[0];
+    inner.channel_stride_in_bytes = static_cast<int>(info.strides[0]);
   }
   py::array get_data() const {
     if (!inner.p_data)
-      return py::array_t<uint8_t>();
+      return py::array_t<float>();
     size_t col = inner.no_samples, row = inner.no_channels,
-           size = sizeof(uint8_t);
+           size = sizeof(float);
     return py::array(py::buffer_info(inner.p_data, size,
-                                     py::format_descriptor<uint8_t>::format(),
-                                     2, {row, col}, {col * size * 4, size}));
+                                     py::format_descriptor<float>::format(),
+                                     2, {row, col}, {col * size, size}));
   }
 };
 
@@ -830,10 +830,10 @@ PYBIND11_MODULE(NDIlib, m) {
             s.inner.FourCC = v;
           })
       .def_property(
-          "data", [](const AudioFrameV3Wrapper &s) { return s.get_data(); },
-          [](AudioFrameV3Wrapper &s, py::array_t<uint8_t> arr) {
-            s.set_data(std::move(arr));
-          })
+           "data", [](const AudioFrameV3Wrapper &s) { return s.get_data(); },
+           [](AudioFrameV3Wrapper &s, py::array_t<float> arr) {
+             s.set_data(std::move(arr));
+           })
       .def_property(
           "channel_stride_in_bytes",
           [](const AudioFrameV3Wrapper &s) {
