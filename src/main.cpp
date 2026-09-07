@@ -198,9 +198,12 @@ struct AudioFrameV2Wrapper {
       return py::array_t<float>();
     size_t col = inner.no_samples, row = inner.no_channels,
            size = sizeof(float);
+    size_t row_stride = inner.channel_stride_in_bytes > 0
+                            ? static_cast<size_t>(inner.channel_stride_in_bytes)
+                            : col * size;
     return py::array(py::buffer_info(inner.p_data, size,
                                      py::format_descriptor<float>::format(), 2,
-                                     {row, col}, {col * size, size}));
+                                     {row, col}, {row_stride, size}));
   }
 };
 
@@ -266,9 +269,12 @@ struct AudioFrameV3Wrapper {
       return py::array_t<float>();
     size_t col = inner.no_samples, row = inner.no_channels,
            size = sizeof(float);
+    size_t row_stride = inner.channel_stride_in_bytes > 0
+                            ? static_cast<size_t>(inner.channel_stride_in_bytes)
+                            : col * size;
     return py::array(py::buffer_info(inner.p_data, size,
-                                     py::format_descriptor<float>::format(),
-                                     2, {row, col}, {col * size, size}));
+                                     py::format_descriptor<float>::format(), 2,
+                                     {row, col}, {row_stride, size}));
   }
 };
 
