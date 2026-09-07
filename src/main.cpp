@@ -267,6 +267,15 @@ struct AudioFrameV3Wrapper {
   py::array get_data() const {
     if (!inner.p_data)
       return py::array_t<float>();
+    // Compressed formats carry an opaque bitstream of data_size_in_bytes bytes.
+    if (inner.FourCC != NDIlib_FourCC_audio_type_FLTP) {
+      size_t bytes = inner.data_size_in_bytes > 0
+                         ? static_cast<size_t>(inner.data_size_in_bytes)
+                         : 0;
+      return py::array(py::buffer_info(inner.p_data, sizeof(uint8_t),
+                                       py::format_descriptor<uint8_t>::format(),
+                                       1, {bytes}, {sizeof(uint8_t)}));
+    }
     size_t col = inner.no_samples, row = inner.no_channels,
            size = sizeof(float);
     size_t row_stride = inner.channel_stride_in_bytes > 0
