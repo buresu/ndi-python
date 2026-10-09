@@ -57,3 +57,6 @@ environment = { MACOSX_DEPLOYMENT_TARGET = "13.0" }
 
 [tool.cibuildwheel.windows]
 archs = ["AMD64"]
+# CMake already bundles the NDI DLL beside the extension module.
+repair-wheel-command = ""
+test-command = 'python -c "import NDIlib"'
