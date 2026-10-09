@@ -98,8 +98,8 @@ jobs:
           echo "NDI_SDK_DIR=$path/ndi-sdk-win/app" >> $env:GITHUB_ENV
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v3.4.1
+        uses: pypa/cibuildwheel@v4.3.0
         env:
-          CIBW_BUILD: "cp310-* cp314-*"
+          CIBW_BUILD: "cp311-* cp315-*"
           CIBW_ENVIRONMENT_LINUX: CMAKE_ARGS="-DNDI_SDK_DIR=/project/ndi-sdk"
           CIBW_ENVIRONMENT_WINDOWS: CMAKE_ARGS="-DNDI_SDK_DIR=${{ env.NDI_SDK_DIR }}"
