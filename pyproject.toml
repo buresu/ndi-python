@@ -64,6 +64,8 @@ test-skip = "*-*linux_{aarch64,armv7l}"
 [tool.cibuildwheel.linux]
 archs = ["x86_64", "aarch64", "armv7l"]
 repair-wheel-command = "auditwheel repair --exclude libavahi-common.so.3 --exclude libavahi-client.so.3 -w {dest_dir} {wheel}"
+# Avahi is left out of the wheel, so the system has to provide it.
+before-test = "yum install -y avahi-libs"
 
 [tool.cibuildwheel.macos]
 archs = ["arm64"]
