@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 import pytest
 
@@ -72,24 +74,47 @@ def test_interleaved_audio_frame_data(frame_type, dtype):
     (ndi.AudioFrameV2, 'v2'),
     (ndi.AudioFrameV3, 'v3'),
 ])
+@pytest.mark.parametrize('buffer', ['exact', 'missing', 'wrong_shape'])
 def test_audio_interleaved_conversion_roundtrip(
-        interleaved_type, suffix, dtype, tolerance, planar_type, version):
+        interleaved_type, suffix, dtype, tolerance, planar_type, version, buffer):
     planar = np.random.default_rng(0).uniform(-0.5, 0.5, (2, 1600)).astype(np.float32)
     src = planar_type()
     src.data = planar
 
+    def convert(function, src, dst, shape, dst_dtype):
+        # The destination buffer is allocated as needed, with a warning only
+        # when one of the wrong shape was given.
+        if buffer == 'exact':
+            dst.data = np.zeros(shape, dtype=dst_dtype)
+        elif buffer == 'wrong_shape':
+            dst.data = np.zeros((16, 2), dtype=dst_dtype)
+        with warnings.catch_warnings():
+            warnings.simplefilter('error')
+            if buffer == 'wrong_shape':
+                with pytest.warns(RuntimeWarning, match='allocating a new array'):
+                    function(src, dst)
+            else:
+                function(src, dst)
+
     interleaved = interleaved_type()
-    interleaved.data = np.zeros((1600, 2), dtype=dtype)
-    getattr(ndi, 'util_audio_to_interleaved_%s_%s' % (suffix, version))(src, interleaved)
+    convert(getattr(ndi, 'util_audio_to_interleaved_%s_%s' % (suffix, version)),
+            src, interleaved, (1600, 2), dtype)
     assert (interleaved.no_samples, interleaved.no_channels) == (1600, 2)
     if dtype == np.float32:
         np.testing.assert_array_equal(interleaved.data, planar.T)
 
     dst = planar_type()
-    dst.data = np.zeros((2, 1600), dtype=np.float32)
-    getattr(ndi, 'util_audio_from_interleaved_%s_%s' % (suffix, version))(interleaved, dst)
+    convert(getattr(ndi, 'util_audio_from_interleaved_%s_%s' % (suffix, version)),
+            interleaved, dst, (2, 1600), np.float32)
     assert (dst.no_channels, dst.no_samples) == (2, 1600)
     np.testing.assert_allclose(dst.data, planar, atol=tolerance)
+
+
+def test_audio_conversion_rejects_bad_arguments():
+    with pytest.raises(ValueError, match='no data'):
+        ndi.util_audio_to_interleaved_16s_v2(ndi.AudioFrameV2(), ndi.AudioFrameInterleaved16s())
+    with pytest.raises(TypeError):
+        ndi.util_audio_to_interleaved_16s_v2(None, None)
 
 
 def test_metadata_frame_data():

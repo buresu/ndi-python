@@ -64,19 +64,36 @@ def test_send_recv_video(loopback, capture):
 
 
 def test_send_recv_video_async(loopback):
-    frames = [make_video_frame(split_color_image()) for _ in range(2)]
-    sent = 0
+    data = split_color_image()
 
     def send():
-        nonlocal sent
-        # The frame passed last must stay alive until the next call.
-        ndi.send_send_video_async_v2(loopback.sender, frames[sent % 2])
-        sent += 1
+        # NDI reads the frame after the call returns, so drop it right away and
+        # reuse its memory, which the binding has to keep from mattering.
+        ndi.send_send_video_async_v2(loopback.sender, make_video_frame(data.copy()))
+        garbage = [np.full_like(data, 128) for _ in range(4)]
+        del garbage
 
     def check(v):
         assert (v.xres, v.yres) == (160, 90)
+        np.testing.assert_allclose(v.data[:, :, :3], data[:, :, :3], atol=16)
 
-    receive_frames(send, capture_video(loopback.receiver, check))
+    receive_frames(send, capture_video(loopback.receiver, check), count=10)
+    ndi.send_send_video_async_v2(loopback.sender, None)
+
+
+def test_send_video_async_then_reassign_data(loopback):
+    data = split_color_image()
+    frame = make_video_frame(data.copy())
+
+    def send():
+        ndi.send_send_video_async_v2(loopback.sender, frame)
+        # Replacing the data releases the array NDI may still be reading.
+        frame.data = data.copy()
+
+    def check(v):
+        np.testing.assert_allclose(v.data[:, :, :3], data[:, :, :3], atol=16)
+
+    receive_frames(send, capture_video(loopback.receiver, check), count=10)
     ndi.send_send_video_async_v2(loopback.sender, None)
 
 

@@ -4,7 +4,9 @@
 
 #include <Processing.NDI.Lib.h>
 
+#include <memory>
 #include <string>
+#include <unordered_map>
 
 namespace py = pybind11;
 
@@ -68,15 +70,17 @@ struct SourceWrapper {
 
 struct VideoFrameV2Wrapper {
   std::string metadata_str;
-  // p_metadata as received from NDI. NDI owns it and expects it back unchanged
-  // in the matching free call, even after metadata has been overwritten.
+  // p_data and p_metadata as received from NDI. NDI owns them and expects
+  // them back unchanged in the matching free call, even after data or
+  // metadata have been overwritten.
   const char *ndi_metadata = nullptr;
+  uint8_t *ndi_data = nullptr;
   carray<uint8_t> data_array;
   NDIlib_video_frame_v2_t inner{};
 
   // Wraps a frame filled in by NDI, leaving its pointers owned by NDI.
   explicit VideoFrameV2Wrapper(const NDIlib_video_frame_v2_t &frame)
-      : ndi_metadata(frame.p_metadata), inner(frame) {}
+      : ndi_metadata(frame.p_metadata), ndi_data(frame.p_data), inner(frame) {}
   VideoFrameV2Wrapper(int xres, int yres, NDIlib_FourCC_video_type_e FourCC,
                       int frame_rate_N, int frame_rate_D,
                       float picture_aspect_ratio,
@@ -101,18 +105,20 @@ struct VideoFrameV2Wrapper {
   }
   VideoFrameV2Wrapper(const VideoFrameV2Wrapper &o)
       : metadata_str(o.metadata_str), ndi_metadata(o.ndi_metadata),
-        data_array(o.data_array), inner(o.inner) {
+        ndi_data(o.ndi_data), data_array(o.data_array), inner(o.inner) {
     rebind_metadata();
   }
   VideoFrameV2Wrapper(VideoFrameV2Wrapper &&o) noexcept
       : metadata_str(std::move(o.metadata_str)), ndi_metadata(o.ndi_metadata),
-        data_array(std::move(o.data_array)), inner(o.inner) {
+        ndi_data(o.ndi_data), data_array(std::move(o.data_array)),
+        inner(o.inner) {
     rebind_metadata();
   }
   VideoFrameV2Wrapper &operator=(const VideoFrameV2Wrapper &o) {
     metadata_str = o.metadata_str;
     data_array = o.data_array;
     ndi_metadata = o.ndi_metadata;
+    ndi_data = o.ndi_data;
     inner = o.inner;
     rebind_metadata();
     return *this;
@@ -121,6 +127,7 @@ struct VideoFrameV2Wrapper {
     metadata_str = std::move(o.metadata_str);
     data_array = std::move(o.data_array);
     ndi_metadata = o.ndi_metadata;
+    ndi_data = o.ndi_data;
     inner = o.inner;
     rebind_metadata();
     return *this;
@@ -136,6 +143,7 @@ struct VideoFrameV2Wrapper {
   // The frame to pass back to NDI's free functions.
   NDIlib_video_frame_v2_t ndi_frame() const {
     NDIlib_video_frame_v2_t frame = inner;
+    frame.p_data = ndi_data;
     frame.p_metadata = ndi_metadata;
     return frame;
   }
@@ -170,15 +178,17 @@ struct VideoFrameV2Wrapper {
 
 struct AudioFrameV2Wrapper {
   std::string metadata_str;
-  // p_metadata as received from NDI. NDI owns it and expects it back unchanged
-  // in the matching free call, even after metadata has been overwritten.
+  // p_data and p_metadata as received from NDI. NDI owns them and expects
+  // them back unchanged in the matching free call, even after data or
+  // metadata have been overwritten.
   const char *ndi_metadata = nullptr;
+  float *ndi_data = nullptr;
   carray<float> data_array;
   NDIlib_audio_frame_v2_t inner{};
 
   // Wraps a frame filled in by NDI, leaving its pointers owned by NDI.
   explicit AudioFrameV2Wrapper(const NDIlib_audio_frame_v2_t &frame)
-      : ndi_metadata(frame.p_metadata), inner(frame) {}
+      : ndi_metadata(frame.p_metadata), ndi_data(frame.p_data), inner(frame) {}
   AudioFrameV2Wrapper(int sample_rate, int no_channels, int no_samples,
                       int64_t timecode, int channel_stride_in_bytes,
                       const char *p_metadata, int64_t timestamp) {
@@ -196,18 +206,20 @@ struct AudioFrameV2Wrapper {
   }
   AudioFrameV2Wrapper(const AudioFrameV2Wrapper &o)
       : metadata_str(o.metadata_str), ndi_metadata(o.ndi_metadata),
-        data_array(o.data_array), inner(o.inner) {
+        ndi_data(o.ndi_data), data_array(o.data_array), inner(o.inner) {
     rebind_metadata();
   }
   AudioFrameV2Wrapper(AudioFrameV2Wrapper &&o) noexcept
       : metadata_str(std::move(o.metadata_str)), ndi_metadata(o.ndi_metadata),
-        data_array(std::move(o.data_array)), inner(o.inner) {
+        ndi_data(o.ndi_data), data_array(std::move(o.data_array)),
+        inner(o.inner) {
     rebind_metadata();
   }
   AudioFrameV2Wrapper &operator=(const AudioFrameV2Wrapper &o) {
     metadata_str = o.metadata_str;
     data_array = o.data_array;
     ndi_metadata = o.ndi_metadata;
+    ndi_data = o.ndi_data;
     inner = o.inner;
     rebind_metadata();
     return *this;
@@ -216,6 +228,7 @@ struct AudioFrameV2Wrapper {
     metadata_str = std::move(o.metadata_str);
     data_array = std::move(o.data_array);
     ndi_metadata = o.ndi_metadata;
+    ndi_data = o.ndi_data;
     inner = o.inner;
     rebind_metadata();
     return *this;
@@ -231,6 +244,7 @@ struct AudioFrameV2Wrapper {
   // The frame to pass back to NDI's free functions.
   NDIlib_audio_frame_v2_t ndi_frame() const {
     NDIlib_audio_frame_v2_t frame = inner;
+    frame.p_data = ndi_data;
     frame.p_metadata = ndi_metadata;
     return frame;
   }
@@ -265,15 +279,17 @@ struct AudioFrameV2Wrapper {
 
 struct AudioFrameV3Wrapper {
   std::string metadata_str;
-  // p_metadata as received from NDI. NDI owns it and expects it back unchanged
-  // in the matching free call, even after metadata has been overwritten.
+  // p_data and p_metadata as received from NDI. NDI owns them and expects
+  // them back unchanged in the matching free call, even after data or
+  // metadata have been overwritten.
   const char *ndi_metadata = nullptr;
+  uint8_t *ndi_data = nullptr;
   carray<float> data_array;
   NDIlib_audio_frame_v3_t inner{};
 
   // Wraps a frame filled in by NDI, leaving its pointers owned by NDI.
   explicit AudioFrameV3Wrapper(const NDIlib_audio_frame_v3_t &frame)
-      : ndi_metadata(frame.p_metadata), inner(frame) {}
+      : ndi_metadata(frame.p_metadata), ndi_data(frame.p_data), inner(frame) {}
   AudioFrameV3Wrapper(int sample_rate, int no_channels, int no_samples,
                       int64_t timecode, NDIlib_FourCC_audio_type_e FourCC,
                       int channel_stride_in_bytes, const char *p_metadata,
@@ -293,18 +309,20 @@ struct AudioFrameV3Wrapper {
   }
   AudioFrameV3Wrapper(const AudioFrameV3Wrapper &o)
       : metadata_str(o.metadata_str), ndi_metadata(o.ndi_metadata),
-        data_array(o.data_array), inner(o.inner) {
+        ndi_data(o.ndi_data), data_array(o.data_array), inner(o.inner) {
     rebind_metadata();
   }
   AudioFrameV3Wrapper(AudioFrameV3Wrapper &&o) noexcept
       : metadata_str(std::move(o.metadata_str)), ndi_metadata(o.ndi_metadata),
-        data_array(std::move(o.data_array)), inner(o.inner) {
+        ndi_data(o.ndi_data), data_array(std::move(o.data_array)),
+        inner(o.inner) {
     rebind_metadata();
   }
   AudioFrameV3Wrapper &operator=(const AudioFrameV3Wrapper &o) {
     metadata_str = o.metadata_str;
     data_array = o.data_array;
     ndi_metadata = o.ndi_metadata;
+    ndi_data = o.ndi_data;
     inner = o.inner;
     rebind_metadata();
     return *this;
@@ -313,6 +331,7 @@ struct AudioFrameV3Wrapper {
     metadata_str = std::move(o.metadata_str);
     data_array = std::move(o.data_array);
     ndi_metadata = o.ndi_metadata;
+    ndi_data = o.ndi_data;
     inner = o.inner;
     rebind_metadata();
     return *this;
@@ -328,6 +347,7 @@ struct AudioFrameV3Wrapper {
   // The frame to pass back to NDI's free functions.
   NDIlib_audio_frame_v3_t ndi_frame() const {
     NDIlib_audio_frame_v3_t frame = inner;
+    frame.p_data = ndi_data;
     frame.p_metadata = ndi_metadata;
     return frame;
   }
@@ -759,6 +779,46 @@ struct ListenerEventWrapper {
       : uuid(e.p_uuid ? e.p_uuid : ""), name(e.p_name ? e.p_name : ""),
         value(e.p_value ? e.p_value : "") {}
 };
+
+// Frames sent with send_send_video_async_v2, by sender. Only touched with the
+// GIL held, and never destroyed, since it holds Python objects that must not
+// outlive the interpreter.
+std::unordered_map<void *, std::unique_ptr<VideoFrameV2Wrapper>> &
+async_video_frames() {
+  static auto *frames =
+      new std::unordered_map<void *, std::unique_ptr<VideoFrameV2Wrapper>>();
+  return *frames;
+}
+
+// NDI's audio conversions write into the buffer the destination already holds.
+// Give the destination a buffer of the shape the source needs, warning when it
+// held one of another shape, so that NDI never writes past its end.
+template <typename Src, typename Dst>
+void prepare_audio_conversion(const Src &src, Dst &dst, py::ssize_t rows,
+                              py::ssize_t cols) {
+  if (!src.inner.p_data)
+    throw py::value_error("source audio frame has no data");
+  auto &arr = dst.data_array;
+  bool has_buffer =
+      arr.size() > 0 && static_cast<const void *>(dst.inner.p_data) ==
+                            static_cast<const void *>(arr.data());
+  if (has_buffer && arr.ndim() == 2 && arr.shape(0) == rows &&
+      arr.shape(1) == cols)
+    return;
+  if (has_buffer) {
+    auto shape = [](py::ssize_t a, py::ssize_t b) {
+      return "(" + std::to_string(a) + ", " + std::to_string(b) + ")";
+    };
+    std::string message = "destination audio data has shape " +
+                          (arr.ndim() == 2 ? shape(arr.shape(0), arr.shape(1))
+                                           : std::to_string(arr.ndim()) + "D") +
+                          " but the conversion needs " + shape(rows, cols) +
+                          "; allocating a new array";
+    if (PyErr_WarnEx(PyExc_RuntimeWarning, message.c_str(), 1) < 0)
+      throw py::error_already_set();
+  }
+  dst.set_data(std::remove_reference_t<decltype(arr)>({rows, cols}));
+}
 
 PYBIND11_MODULE(NDIlib, m) {
 
@@ -1795,17 +1855,28 @@ PYBIND11_MODULE(NDIlib, m) {
       [](py::capsule instance) {
         auto p_instance =
             static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
-        NDIlib_send_destroy(p_instance);
+        {
+          py::gil_scoped_release release;
+          NDIlib_send_destroy(p_instance);
+        }
+        async_video_frames().erase(p_instance);
       },
       py::arg("instance"));
+
+  // The send calls release the GIL, as clocked senders wait for the frame rate.
 
   m.def(
       "send_send_video_v2",
       [](py::capsule instance, const VideoFrameV2Wrapper *p_video_data) {
         auto p_instance =
             static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
-        NDIlib_send_send_video_v2(
-            p_instance, p_video_data ? &p_video_data->inner : nullptr);
+        {
+          py::gil_scoped_release release;
+          NDIlib_send_send_video_v2(
+              p_instance, p_video_data ? &p_video_data->inner : nullptr);
+        }
+        // This synchronizes any frame still being sent asynchronously.
+        async_video_frames().erase(p_instance);
       },
       py::arg("instance"), py::arg("video_data"));
 
@@ -1814,8 +1885,22 @@ PYBIND11_MODULE(NDIlib, m) {
       [](py::capsule instance, const VideoFrameV2Wrapper *p_video_data) {
         auto p_instance =
             static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
-        NDIlib_send_send_video_async_v2(
-            p_instance, p_video_data ? &p_video_data->inner : nullptr);
+        // NDI reads the frame until the next synchronizing call, so send a copy
+        // that stays alive until then, whatever happens to the original.
+        std::unique_ptr<VideoFrameV2Wrapper> frame;
+        if (p_video_data)
+          frame = std::make_unique<VideoFrameV2Wrapper>(*p_video_data);
+        {
+          py::gil_scoped_release release;
+          NDIlib_send_send_video_async_v2(p_instance,
+                                          frame ? &frame->inner : nullptr);
+        }
+        // This call has synchronized the previous frame, so it can go now.
+        auto &frames = async_video_frames();
+        if (frame)
+          frames[p_instance] = std::move(frame);
+        else
+          frames.erase(p_instance);
       },
       py::arg("instance"), py::arg("video_data"));
 
@@ -1824,6 +1909,7 @@ PYBIND11_MODULE(NDIlib, m) {
       [](py::capsule instance, const AudioFrameV2Wrapper *p_audio_data) {
         auto p_instance =
             static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
+        py::gil_scoped_release release;
         NDIlib_send_send_audio_v2(
             p_instance, p_audio_data ? &p_audio_data->inner : nullptr);
       },
@@ -1834,6 +1920,7 @@ PYBIND11_MODULE(NDIlib, m) {
       [](py::capsule instance, const AudioFrameV3Wrapper *p_audio_data) {
         auto p_instance =
             static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
+        py::gil_scoped_release release;
         NDIlib_send_send_audio_v3(
             p_instance, p_audio_data ? &p_audio_data->inner : nullptr);
       },
@@ -2177,131 +2264,158 @@ PYBIND11_MODULE(NDIlib, m) {
   m.def(
       "util_send_send_audio_interleaved_16s",
       [](py::capsule instance,
-         const AudioFrameInterleaved16sWrapper *p_audio_data) {
+         const AudioFrameInterleaved16sWrapper &audio_data) {
         auto p_instance =
             static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
+        py::gil_scoped_release release;
         NDIlib_util_send_send_audio_interleaved_16s(p_instance,
-                                                    &p_audio_data->inner);
+                                                    &audio_data.inner);
       },
       py::arg("instance"), py::arg("audio_data"));
 
   m.def(
       "util_send_send_audio_interleaved_32s",
       [](py::capsule instance,
-         const AudioFrameInterleaved32sWrapper *p_audio_data) {
+         const AudioFrameInterleaved32sWrapper &audio_data) {
         auto p_instance =
             static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
+        py::gil_scoped_release release;
         NDIlib_util_send_send_audio_interleaved_32s(p_instance,
-                                                    &p_audio_data->inner);
+                                                    &audio_data.inner);
       },
       py::arg("instance"), py::arg("audio_data"));
 
   m.def(
       "util_send_send_audio_interleaved_32f",
       [](py::capsule instance,
-         const AudioFrameInterleaved32fWrapper *p_audio_data) {
+         const AudioFrameInterleaved32fWrapper &audio_data) {
         auto p_instance =
             static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
+        py::gil_scoped_release release;
         NDIlib_util_send_send_audio_interleaved_32f(p_instance,
-                                                    &p_audio_data->inner);
+                                                    &audio_data.inner);
       },
       py::arg("instance"), py::arg("audio_data"));
 
   m.def(
       "util_audio_to_interleaved_16s_v2",
-      [](const AudioFrameV2Wrapper *src, AudioFrameInterleaved16sWrapper *dst) {
-        NDIlib_util_audio_to_interleaved_16s_v2(&src->inner, &dst->inner);
+      [](const AudioFrameV2Wrapper &src, AudioFrameInterleaved16sWrapper &dst) {
+        prepare_audio_conversion(src, dst, src.inner.no_samples,
+                                 src.inner.no_channels);
+        NDIlib_util_audio_to_interleaved_16s_v2(&src.inner, &dst.inner);
       },
       py::arg("src"), py::arg("dst"));
 
   m.def(
       "util_audio_to_interleaved_16s_v3",
-      [](const AudioFrameV3Wrapper *src, AudioFrameInterleaved16sWrapper *dst) {
-        NDIlib_util_audio_to_interleaved_16s_v3(&src->inner, &dst->inner);
+      [](const AudioFrameV3Wrapper &src, AudioFrameInterleaved16sWrapper &dst) {
+        prepare_audio_conversion(src, dst, src.inner.no_samples,
+                                 src.inner.no_channels);
+        NDIlib_util_audio_to_interleaved_16s_v3(&src.inner, &dst.inner);
       },
       py::arg("src"), py::arg("dst"));
 
   m.def(
       "util_audio_from_interleaved_16s_v2",
-      [](const AudioFrameInterleaved16sWrapper *src, AudioFrameV2Wrapper *dst) {
-        NDIlib_util_audio_from_interleaved_16s_v2(&src->inner, &dst->inner);
+      [](const AudioFrameInterleaved16sWrapper &src, AudioFrameV2Wrapper &dst) {
+        prepare_audio_conversion(src, dst, src.inner.no_channels,
+                                 src.inner.no_samples);
+        NDIlib_util_audio_from_interleaved_16s_v2(&src.inner, &dst.inner);
       },
       py::arg("src"), py::arg("dst"));
 
   m.def(
       "util_audio_from_interleaved_16s_v3",
-      [](const AudioFrameInterleaved16sWrapper *src, AudioFrameV3Wrapper *dst) {
-        NDIlib_util_audio_from_interleaved_16s_v3(&src->inner, &dst->inner);
+      [](const AudioFrameInterleaved16sWrapper &src, AudioFrameV3Wrapper &dst) {
+        prepare_audio_conversion(src, dst, src.inner.no_channels,
+                                 src.inner.no_samples);
+        NDIlib_util_audio_from_interleaved_16s_v3(&src.inner, &dst.inner);
       },
       py::arg("src"), py::arg("dst"));
 
   m.def(
       "util_audio_to_interleaved_32s_v2",
-      [](const AudioFrameV2Wrapper *src, AudioFrameInterleaved32sWrapper *dst) {
-        NDIlib_util_audio_to_interleaved_32s_v2(&src->inner, &dst->inner);
+      [](const AudioFrameV2Wrapper &src, AudioFrameInterleaved32sWrapper &dst) {
+        prepare_audio_conversion(src, dst, src.inner.no_samples,
+                                 src.inner.no_channels);
+        NDIlib_util_audio_to_interleaved_32s_v2(&src.inner, &dst.inner);
       },
       py::arg("src"), py::arg("dst"));
 
   m.def(
       "util_audio_to_interleaved_32s_v3",
-      [](const AudioFrameV3Wrapper *src, AudioFrameInterleaved32sWrapper *dst) {
-        NDIlib_util_audio_to_interleaved_32s_v3(&src->inner, &dst->inner);
+      [](const AudioFrameV3Wrapper &src, AudioFrameInterleaved32sWrapper &dst) {
+        prepare_audio_conversion(src, dst, src.inner.no_samples,
+                                 src.inner.no_channels);
+        NDIlib_util_audio_to_interleaved_32s_v3(&src.inner, &dst.inner);
       },
       py::arg("src"), py::arg("dst"));
 
   m.def(
       "util_audio_from_interleaved_32s_v2",
-      [](const AudioFrameInterleaved32sWrapper *src, AudioFrameV2Wrapper *dst) {
-        NDIlib_util_audio_from_interleaved_32s_v2(&src->inner, &dst->inner);
+      [](const AudioFrameInterleaved32sWrapper &src, AudioFrameV2Wrapper &dst) {
+        prepare_audio_conversion(src, dst, src.inner.no_channels,
+                                 src.inner.no_samples);
+        NDIlib_util_audio_from_interleaved_32s_v2(&src.inner, &dst.inner);
       },
       py::arg("src"), py::arg("dst"));
 
   m.def(
       "util_audio_from_interleaved_32s_v3",
-      [](const AudioFrameInterleaved32sWrapper *src, AudioFrameV3Wrapper *dst) {
-        NDIlib_util_audio_from_interleaved_32s_v3(&src->inner, &dst->inner);
+      [](const AudioFrameInterleaved32sWrapper &src, AudioFrameV3Wrapper &dst) {
+        prepare_audio_conversion(src, dst, src.inner.no_channels,
+                                 src.inner.no_samples);
+        NDIlib_util_audio_from_interleaved_32s_v3(&src.inner, &dst.inner);
       },
       py::arg("src"), py::arg("dst"));
 
   m.def(
       "util_audio_to_interleaved_32f_v2",
-      [](const AudioFrameV2Wrapper *src, AudioFrameInterleaved32fWrapper *dst) {
-        NDIlib_util_audio_to_interleaved_32f_v2(&src->inner, &dst->inner);
+      [](const AudioFrameV2Wrapper &src, AudioFrameInterleaved32fWrapper &dst) {
+        prepare_audio_conversion(src, dst, src.inner.no_samples,
+                                 src.inner.no_channels);
+        NDIlib_util_audio_to_interleaved_32f_v2(&src.inner, &dst.inner);
       },
       py::arg("src"), py::arg("dst"));
 
   m.def(
       "util_audio_to_interleaved_32f_v3",
-      [](const AudioFrameV3Wrapper *src, AudioFrameInterleaved32fWrapper *dst) {
-        NDIlib_util_audio_to_interleaved_32f_v3(&src->inner, &dst->inner);
+      [](const AudioFrameV3Wrapper &src, AudioFrameInterleaved32fWrapper &dst) {
+        prepare_audio_conversion(src, dst, src.inner.no_samples,
+                                 src.inner.no_channels);
+        NDIlib_util_audio_to_interleaved_32f_v3(&src.inner, &dst.inner);
       },
       py::arg("src"), py::arg("dst"));
 
   m.def(
       "util_audio_from_interleaved_32f_v2",
-      [](const AudioFrameInterleaved32fWrapper *src, AudioFrameV2Wrapper *dst) {
-        NDIlib_util_audio_from_interleaved_32f_v2(&src->inner, &dst->inner);
+      [](const AudioFrameInterleaved32fWrapper &src, AudioFrameV2Wrapper &dst) {
+        prepare_audio_conversion(src, dst, src.inner.no_channels,
+                                 src.inner.no_samples);
+        NDIlib_util_audio_from_interleaved_32f_v2(&src.inner, &dst.inner);
       },
       py::arg("src"), py::arg("dst"));
 
   m.def(
       "util_audio_from_interleaved_32f_v3",
-      [](const AudioFrameInterleaved32fWrapper *src, AudioFrameV3Wrapper *dst) {
-        NDIlib_util_audio_from_interleaved_32f_v3(&src->inner, &dst->inner);
+      [](const AudioFrameInterleaved32fWrapper &src, AudioFrameV3Wrapper &dst) {
+        prepare_audio_conversion(src, dst, src.inner.no_channels,
+                                 src.inner.no_samples);
+        NDIlib_util_audio_from_interleaved_32f_v3(&src.inner, &dst.inner);
       },
       py::arg("src"), py::arg("dst"));
 
   m.def(
       "util_V210_to_P216",
-      [](const VideoFrameV2Wrapper *src_v210, VideoFrameV2Wrapper *dst_p216) {
-        NDIlib_util_V210_to_P216(&src_v210->inner, &dst_p216->inner);
+      [](const VideoFrameV2Wrapper &src_v210, VideoFrameV2Wrapper &dst_p216) {
+        NDIlib_util_V210_to_P216(&src_v210.inner, &dst_p216.inner);
       },
       py::arg("src_v210"), py::arg("dst_p216"));
 
   m.def(
       "util_P216_to_V210",
-      [](const VideoFrameV2Wrapper *src_p216, VideoFrameV2Wrapper *dst_v210) {
-        NDIlib_util_P216_to_V210(&src_p216->inner, &dst_v210->inner);
+      [](const VideoFrameV2Wrapper &src_p216, VideoFrameV2Wrapper &dst_v210) {
+        NDIlib_util_P216_to_V210(&src_p216.inner, &dst_v210.inner);
       },
       py::arg("src_p216"), py::arg("dst_v210"));
 
@@ -2527,10 +2641,14 @@ PYBIND11_MODULE(NDIlib, m) {
       "recv_listener_get_events",
       [](py::capsule instance, uint32_t timeout_in_ms) {
         uint32_t num = 0;
-        auto p = NDIlib_recv_listener_get_events(
-            static_cast<NDIlib_recv_listener_instance_t>(
-                instance.get_pointer()),
-            &num, timeout_in_ms);
+        const NDIlib_recv_listener_event *p;
+        {
+          py::gil_scoped_release release;
+          p = NDIlib_recv_listener_get_events(
+              static_cast<NDIlib_recv_listener_instance_t>(
+                  instance.get_pointer()),
+              &num, timeout_in_ms);
+        }
         std::vector<ListenerEventWrapper> result;
         if (p) {
           for (uint32_t i = 0; i < num; ++i)
@@ -2671,10 +2789,14 @@ PYBIND11_MODULE(NDIlib, m) {
       "send_listener_get_events",
       [](py::capsule instance, uint32_t timeout_in_ms) {
         uint32_t num = 0;
-        auto p = NDIlib_send_listener_get_events(
-            static_cast<NDIlib_send_listener_instance_t>(
-                instance.get_pointer()),
-            &num, timeout_in_ms);
+        const NDIlib_send_listener_event *p;
+        {
+          py::gil_scoped_release release;
+          p = NDIlib_send_listener_get_events(
+              static_cast<NDIlib_send_listener_instance_t>(
+                  instance.get_pointer()),
+              &num, timeout_in_ms);
+        }
         std::vector<ListenerEventWrapper> result;
         if (p) {
           for (uint32_t i = 0; i < num; ++i)
