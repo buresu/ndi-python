@@ -8,6 +8,10 @@
 
 namespace py = pybind11;
 
+// Frame data handed to NDI must be C-contiguous; other arrays get copied.
+template <typename T>
+using carray = py::array_t<T, py::array::c_style | py::array::forcecast>;
+
 // Wrapper structs
 
 struct SourceWrapper {
@@ -67,7 +71,7 @@ struct VideoFrameV2Wrapper {
   // p_metadata as received from NDI. NDI owns it and expects it back unchanged
   // in the matching free call, even after metadata has been overwritten.
   const char *ndi_metadata = nullptr;
-  py::array_t<uint8_t> data_array;
+  carray<uint8_t> data_array;
   NDIlib_video_frame_v2_t inner{};
 
   // Wraps a frame filled in by NDI, leaving its pointers owned by NDI.
@@ -139,7 +143,10 @@ struct VideoFrameV2Wrapper {
     metadata_str = s;
     inner.p_metadata = metadata_str.c_str();
   }
-  void set_data(py::array_t<uint8_t> arr) {
+  void set_data(carray<uint8_t> arr) {
+    if (arr.ndim() != 2 && arr.ndim() != 3)
+      throw py::value_error(
+          "video data must be a 2D or 3D array of rows and columns");
     data_array = std::move(arr);
     auto info = data_array.request();
     inner.p_data = static_cast<uint8_t *>(info.ptr);
@@ -166,7 +173,7 @@ struct AudioFrameV2Wrapper {
   // p_metadata as received from NDI. NDI owns it and expects it back unchanged
   // in the matching free call, even after metadata has been overwritten.
   const char *ndi_metadata = nullptr;
-  py::array_t<float> data_array;
+  carray<float> data_array;
   NDIlib_audio_frame_v2_t inner{};
 
   // Wraps a frame filled in by NDI, leaving its pointers owned by NDI.
@@ -231,7 +238,10 @@ struct AudioFrameV2Wrapper {
     metadata_str = s;
     inner.p_metadata = metadata_str.c_str();
   }
-  void set_data(py::array_t<float> arr) {
+  void set_data(carray<float> arr) {
+    if (arr.ndim() != 2)
+      throw py::value_error(
+          "audio data must be a 2D array of (channels, samples)");
     data_array = std::move(arr);
     auto info = data_array.request();
     inner.p_data = static_cast<float *>(info.ptr);
@@ -258,7 +268,7 @@ struct AudioFrameV3Wrapper {
   // p_metadata as received from NDI. NDI owns it and expects it back unchanged
   // in the matching free call, even after metadata has been overwritten.
   const char *ndi_metadata = nullptr;
-  py::array_t<float> data_array;
+  carray<float> data_array;
   NDIlib_audio_frame_v3_t inner{};
 
   // Wraps a frame filled in by NDI, leaving its pointers owned by NDI.
@@ -325,7 +335,10 @@ struct AudioFrameV3Wrapper {
     metadata_str = s;
     inner.p_metadata = metadata_str.c_str();
   }
-  void set_data(py::array_t<float> arr) {
+  void set_data(carray<float> arr) {
+    if (arr.ndim() != 2)
+      throw py::value_error(
+          "audio data must be a 2D array of (channels, samples)");
     data_array = std::move(arr);
     auto info = data_array.request();
     inner.p_data = static_cast<uint8_t *>(info.ptr);
@@ -501,7 +514,7 @@ struct RoutingCreateWrapper {
 };
 
 struct AudioFrameInterleaved16sWrapper {
-  py::array_t<int16_t> data_array;
+  carray<int16_t> data_array;
   NDIlib_audio_frame_interleaved_16s_t inner{};
 
   AudioFrameInterleaved16sWrapper(int sample_rate, int no_channels,
@@ -514,7 +527,10 @@ struct AudioFrameInterleaved16sWrapper {
     inner.reference_level = reference_level;
     inner.p_data = nullptr;
   }
-  void set_data(py::array_t<int16_t> arr) {
+  void set_data(carray<int16_t> arr) {
+    if (arr.ndim() != 2)
+      throw py::value_error(
+          "audio data must be a 2D array of (samples, channels)");
     data_array = std::move(arr);
     auto info = data_array.request();
     inner.p_data = static_cast<int16_t *>(info.ptr);
@@ -534,7 +550,7 @@ struct AudioFrameInterleaved16sWrapper {
 };
 
 struct AudioFrameInterleaved32sWrapper {
-  py::array_t<int32_t> data_array;
+  carray<int32_t> data_array;
   NDIlib_audio_frame_interleaved_32s_t inner{};
 
   AudioFrameInterleaved32sWrapper(int sample_rate, int no_channels,
@@ -547,7 +563,10 @@ struct AudioFrameInterleaved32sWrapper {
     inner.reference_level = reference_level;
     inner.p_data = nullptr;
   }
-  void set_data(py::array_t<int32_t> arr) {
+  void set_data(carray<int32_t> arr) {
+    if (arr.ndim() != 2)
+      throw py::value_error(
+          "audio data must be a 2D array of (samples, channels)");
     data_array = std::move(arr);
     auto info = data_array.request();
     inner.p_data = static_cast<int32_t *>(info.ptr);
@@ -567,7 +586,7 @@ struct AudioFrameInterleaved32sWrapper {
 };
 
 struct AudioFrameInterleaved32fWrapper {
-  py::array_t<float> data_array;
+  carray<float> data_array;
   NDIlib_audio_frame_interleaved_32f_t inner{};
 
   AudioFrameInterleaved32fWrapper(int sample_rate, int no_channels,
@@ -578,7 +597,10 @@ struct AudioFrameInterleaved32fWrapper {
     inner.timecode = timecode;
     inner.p_data = nullptr;
   }
-  void set_data(py::array_t<float> arr) {
+  void set_data(carray<float> arr) {
+    if (arr.ndim() != 2)
+      throw py::value_error(
+          "audio data must be a 2D array of (samples, channels)");
     data_array = std::move(arr);
     auto info = data_array.request();
     inner.p_data = static_cast<float *>(info.ptr);
@@ -817,7 +839,7 @@ PYBIND11_MODULE(NDIlib, m) {
           [](VideoFrameV2Wrapper &s, int64_t v) { s.inner.timecode = v; })
       .def_property(
           "data", [](const VideoFrameV2Wrapper &s) { return s.get_data(); },
-          [](VideoFrameV2Wrapper &s, py::array_t<uint8_t> arr) {
+          [](VideoFrameV2Wrapper &s, carray<uint8_t> arr) {
             s.set_data(std::move(arr));
           })
       .def_property(
@@ -864,7 +886,7 @@ PYBIND11_MODULE(NDIlib, m) {
           [](AudioFrameV2Wrapper &s, int64_t v) { s.inner.timecode = v; })
       .def_property(
           "data", [](const AudioFrameV2Wrapper &s) { return s.get_data(); },
-          [](AudioFrameV2Wrapper &s, py::array_t<float> arr) {
+          [](AudioFrameV2Wrapper &s, carray<float> arr) {
             s.set_data(std::move(arr));
           })
       .def_property(
@@ -918,7 +940,7 @@ PYBIND11_MODULE(NDIlib, m) {
           })
       .def_property(
           "data", [](const AudioFrameV3Wrapper &s) { return s.get_data(); },
-          [](AudioFrameV3Wrapper &s, py::array_t<float> arr) {
+          [](AudioFrameV3Wrapper &s, carray<float> arr) {
             s.set_data(std::move(arr));
           })
       .def_property(
@@ -1233,9 +1255,13 @@ PYBIND11_MODULE(NDIlib, m) {
         bool result = NDIlib_recv_get_source_name(p_instance, &p_source_name,
                                                   timeout_in_ms);
         py::gil_scoped_acquire acquire;
-        if (result && p_source_name)
-          return py::str(p_source_name);
-        return py::none();
+        py::object name = py::none();
+        if (p_source_name) {
+          if (result)
+            name = py::str(p_source_name);
+          NDIlib_recv_free_string(p_instance, p_source_name);
+        }
+        return name;
       },
       py::arg("instance"), py::arg("timeout_in_ms") = 0);
 
@@ -1868,10 +1894,14 @@ PYBIND11_MODULE(NDIlib, m) {
 
   m.def(
       "send_get_source_name",
-      [](py::capsule instance) {
+      [](py::capsule instance) -> py::object {
         auto p_instance =
             static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
-        return NDIlib_send_get_source_name(p_instance);
+        auto p_source = NDIlib_send_get_source_name(p_instance);
+        if (!p_source)
+          return py::none();
+        return py::cast(
+            SourceWrapper(p_source->p_ndi_name, p_source->p_url_address));
       },
       py::arg("instance"));
 
@@ -1942,10 +1972,14 @@ PYBIND11_MODULE(NDIlib, m) {
 
   m.def(
       "routing_get_source_name",
-      [](py::capsule instance) {
+      [](py::capsule instance) -> py::object {
         auto p_instance =
             static_cast<NDIlib_routing_instance_type *>(instance.get_pointer());
-        return NDIlib_routing_get_source_name(p_instance);
+        auto p_source = NDIlib_routing_get_source_name(p_instance);
+        if (!p_source)
+          return py::none();
+        return py::cast(
+            SourceWrapper(p_source->p_ndi_name, p_source->p_url_address));
       },
       py::arg("instance"));
 
@@ -1999,7 +2033,7 @@ PYBIND11_MODULE(NDIlib, m) {
       .def_property(
           "data",
           [](const AudioFrameInterleaved16sWrapper &s) { return s.get_data(); },
-          [](AudioFrameInterleaved16sWrapper &s, py::array_t<int16_t> arr) {
+          [](AudioFrameInterleaved16sWrapper &s, carray<int16_t> arr) {
             s.set_data(std::move(arr));
           });
 
@@ -2052,7 +2086,7 @@ PYBIND11_MODULE(NDIlib, m) {
       .def_property(
           "data",
           [](const AudioFrameInterleaved32sWrapper &s) { return s.get_data(); },
-          [](AudioFrameInterleaved32sWrapper &s, py::array_t<int32_t> arr) {
+          [](AudioFrameInterleaved32sWrapper &s, carray<int32_t> arr) {
             s.set_data(std::move(arr));
           });
 
@@ -2095,7 +2129,7 @@ PYBIND11_MODULE(NDIlib, m) {
       .def_property(
           "data",
           [](const AudioFrameInterleaved32fWrapper &s) { return s.get_data(); },
-          [](AudioFrameInterleaved32fWrapper &s, py::array_t<float> arr) {
+          [](AudioFrameInterleaved32fWrapper &s, carray<float> arr) {
             s.set_data(std::move(arr));
           });
 
@@ -2376,6 +2410,8 @@ PYBIND11_MODULE(NDIlib, m) {
         NDIlib_recv_listener_destroy(
             static_cast<NDIlib_recv_listener_instance_t>(
                 instance.get_pointer()));
+        // Keep the capsule from destroying the instance again.
+        PyCapsule_SetDestructor(instance.ptr(), nullptr);
       },
       py::arg("instance"));
 
@@ -2518,6 +2554,8 @@ PYBIND11_MODULE(NDIlib, m) {
         NDIlib_send_listener_destroy(
             static_cast<NDIlib_send_listener_instance_t>(
                 instance.get_pointer()));
+        // Keep the capsule from destroying the instance again.
+        PyCapsule_SetDestructor(instance.ptr(), nullptr);
       },
       py::arg("instance"));
 
@@ -2644,6 +2682,8 @@ PYBIND11_MODULE(NDIlib, m) {
         NDIlib_recv_advertiser_destroy(
             static_cast<NDIlib_recv_advertiser_instance_t>(
                 instance.get_pointer()));
+        // Keep the capsule from destroying the instance again.
+        PyCapsule_SetDestructor(instance.ptr(), nullptr);
       },
       py::arg("instance"));
 
@@ -2712,6 +2752,8 @@ PYBIND11_MODULE(NDIlib, m) {
         NDIlib_send_advertiser_destroy(
             static_cast<NDIlib_send_advertiser_instance_t>(
                 instance.get_pointer()));
+        // Keep the capsule from destroying the instance again.
+        PyCapsule_SetDestructor(instance.ptr(), nullptr);
       },
       py::arg("instance"));
 

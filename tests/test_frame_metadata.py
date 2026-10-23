@@ -1,9 +1,9 @@
 import time
 
-import numpy as np
 import pytest
 
 import NDIlib as ndi
+from helpers import make_audio_frame, make_video_frame, receive_frames
 
 # std::string keeps short strings inline and long ones on the heap, and freeing
 # metadata through NDI used to break differently for each, so cover both.
@@ -11,37 +11,6 @@ METADATA = pytest.mark.parametrize('metadata', [
     '<ndi_color_info transfer="bt_709" matrix="bt_709" primaries="bt_709" />',
     '<a/>',
 ], ids=['long', 'short'])
-
-# Several frames per test, since a bad free may only crash on a later frame.
-FRAME_COUNT = 5
-
-
-def make_video_frame(metadata):
-    frame = ndi.VideoFrameV2()
-    frame.data = np.zeros((90, 160, 4), dtype=np.uint8)
-    frame.FourCC = ndi.FOURCC_VIDEO_TYPE_BGRX
-    frame.metadata = metadata
-    return frame
-
-
-def make_audio_frame(metadata):
-    frame = ndi.AudioFrameV2()
-    frame.sample_rate = 48000
-    frame.data = np.zeros((2, 1600), dtype=np.float32)
-    frame.metadata = metadata
-    return frame
-
-
-def receive_frames(send, capture, count=FRAME_COUNT, timeout=10):
-    """Calls send() until capture() has returned count frames."""
-    frames = 0
-    deadline = time.monotonic() + timeout
-    while frames < count:
-        if time.monotonic() > deadline:
-            pytest.fail('received only %d of %d frames' % (frames, count))
-        send()
-        if capture():
-            frames += 1
 
 
 @pytest.mark.parametrize('frame_type', [
@@ -59,8 +28,8 @@ def test_metadata_roundtrip(frame_type, metadata):
 @pytest.mark.parametrize('capture', [ndi.recv_capture_v2, ndi.recv_capture_v3])
 @METADATA
 def test_recv_video_metadata(loopback, capture, metadata):
-    sender, receiver = loopback
-    frame = make_video_frame(metadata)
+    sender, receiver = loopback.sender, loopback.receiver
+    frame = make_video_frame(metadata=metadata)
 
     def capture_one():
         t, v, _, _ = capture(receiver, 100, want_audio=False, want_metadata=False)
@@ -80,8 +49,8 @@ def test_recv_video_metadata(loopback, capture, metadata):
 ], ids=['v2', 'v3'])
 @METADATA
 def test_recv_audio_metadata(loopback, capture, free, metadata):
-    sender, receiver = loopback
-    frame = make_audio_frame(metadata)
+    sender, receiver = loopback.sender, loopback.receiver
+    frame = make_audio_frame(metadata=metadata)
 
     def capture_one():
         t, _, a, _ = capture(receiver, 100, want_video=False, want_metadata=False)
@@ -97,8 +66,8 @@ def test_recv_audio_metadata(loopback, capture, free, metadata):
 @pytest.mark.loopback
 @METADATA
 def test_free_after_overwriting_metadata(loopback, metadata):
-    sender, receiver = loopback
-    frame = make_video_frame(metadata)
+    sender, receiver = loopback.sender, loopback.receiver
+    frame = make_video_frame(metadata=metadata)
     replacement = 'x' * 200
 
     def capture_one():
@@ -117,8 +86,8 @@ def test_free_after_overwriting_metadata(loopback, metadata):
 @pytest.mark.loopback
 @METADATA
 def test_framesync_video_metadata(loopback, metadata):
-    sender, receiver = loopback
-    frame = make_video_frame(metadata)
+    sender, receiver = loopback.sender, loopback.receiver
+    frame = make_video_frame(metadata=metadata)
     framesync = ndi.framesync_create(receiver)
 
     def capture_one():
