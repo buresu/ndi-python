@@ -40,6 +40,15 @@ dependencies = ["numpy"]
 [project.urls]
 Homepage = "https://github.com/buresu/ndi-python"
 
+[dependency-groups]
+test = ["pytest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "loopback: sends and receives NDI frames within the process (needs mDNS discovery)",
+]
+
 [tool.scikit-build]
 wheel.packages = ["src/NDIlib"]
 

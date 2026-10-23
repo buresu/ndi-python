@@ -83,6 +83,15 @@ To build for a specific Python version:
 CMAKE_ARGS="-DNDI_SDK_DIR=/path/to/ndisdk" /path/to/python3.12 -m pip install .
 ```
 
+## Test
+
+Tests run against the installed package.  
+Tests marked `loopback` send and receive frames within the process, so they need mDNS (Avahi on Linux). Use `-m "not loopback"` to skip them.
+```
+pip install . --group test
+pytest
+```
+
 ## License
 ndi-python is MIT License  
 NDI follows NDI's license
