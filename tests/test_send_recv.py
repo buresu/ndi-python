@@ -155,13 +155,64 @@ def test_send_metadata_to_sender(loopback):
 
     def capture_one():
         m = ndi.MetadataFrame()
-        ndi.send_capture(loopback.sender, m, 100)
-        if not m.data:
+        if ndi.send_capture(loopback.sender, m, 100) != ndi.FRAME_TYPE_METADATA:
+            assert m.data == ''
             return False
         try:
             assert m.data == sent.data
         finally:
             ndi.send_free_metadata(loopback.sender, m)
+        return True
+
+    receive_frames(lambda: ndi.recv_send_metadata(loopback.receiver, sent), capture_one)
+
+
+def test_send_metadata_non_ascii(loopback):
+    sent = ndi.MetadataFrame()
+    sent.data = '<hello name="日本語"/>'
+
+    def capture_one():
+        t, _, _, m = ndi.recv_capture_v2(
+            loopback.receiver, 100, want_video=False, want_audio=False)
+        if t != ndi.FRAME_TYPE_METADATA:
+            return False
+        try:
+            assert m.data == sent.data
+        finally:
+            ndi.recv_free_metadata(loopback.receiver, m)
+        return True
+
+    receive_frames(lambda: ndi.send_send_metadata(loopback.sender, sent), capture_one)
+
+
+def test_free_after_overwriting_received_metadata(loopback):
+    sent = ndi.MetadataFrame()
+    sent.data = '<hello/>'
+
+    def capture_one():
+        t, _, _, m = ndi.recv_capture_v2(
+            loopback.receiver, 100, want_video=False, want_audio=False)
+        if t != ndi.FRAME_TYPE_METADATA:
+            return False
+        m.data = '<overwritten/>'
+        assert m.data == '<overwritten/>'
+        ndi.recv_free_metadata(loopback.receiver, m)
+        return True
+
+    receive_frames(lambda: ndi.send_send_metadata(loopback.sender, sent), capture_one)
+
+
+def test_free_after_overwriting_captured_metadata(loopback):
+    sent = ndi.MetadataFrame()
+    sent.data = '<hello/>'
+    # A single frame reused across captures, as a polling loop would do.
+    m = ndi.MetadataFrame()
+
+    def capture_one():
+        if ndi.send_capture(loopback.sender, m, 100) != ndi.FRAME_TYPE_METADATA:
+            return False
+        m.data = '<overwritten/>'
+        ndi.send_free_metadata(loopback.sender, m)
         return True
 
     receive_frames(lambda: ndi.recv_send_metadata(loopback.receiver, sent), capture_one)

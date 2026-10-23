@@ -94,10 +94,25 @@ def test_audio_interleaved_conversion_roundtrip(
 
 def test_metadata_frame_data():
     frame = ndi.MetadataFrame()
-    assert frame.data == ''
+    assert (frame.data, frame.length) == ('', 0)
     frame.data = '<hello/>'
     assert frame.data == '<hello/>'
+    frame.data = ''
+    assert (frame.data, frame.length) == ('', 0)
     assert ndi.MetadataFrame(p_data='<hello/>').data == '<hello/>'
+
+
+@pytest.mark.parametrize('data', ['<hello/>', '<a name="日本語"/>'])
+def test_metadata_frame_length(data):
+    # NDI counts UTF-8 bytes including the terminating NUL.
+    expected = len(data.encode()) + 1
+    frame = ndi.MetadataFrame()
+    frame.data = data
+    assert frame.length == expected
+    # The length argument is ignored in favor of the data.
+    assert ndi.MetadataFrame(100, p_data=data).length == expected
+    with pytest.raises(AttributeError):
+        frame.length = 100
 
 
 def test_source():

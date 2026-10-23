@@ -371,19 +371,57 @@ struct AudioFrameV3Wrapper {
 
 struct MetadataFrameWrapper {
   std::string data_str;
+  // p_data as received from NDI. NDI owns it and expects it back unchanged in
+  // the matching free call, even after data has been overwritten.
+  char *ndi_data = nullptr;
   NDIlib_metadata_frame_t inner{};
 
-  MetadataFrameWrapper(int length, int64_t timecode, const char *p_data) {
-    inner.length = length;
+  // Wraps a frame filled in by NDI, leaving its data owned by NDI.
+  explicit MetadataFrameWrapper(const NDIlib_metadata_frame_t &frame)
+      : ndi_data(frame.p_data), inner(frame) {}
+  // The length argument is only kept for compatibility; it follows the data.
+  MetadataFrameWrapper(int /* length */, int64_t timecode, const char *p_data) {
     inner.timecode = timecode;
-    if (p_data) {
-      data_str = p_data;
+    if (p_data)
+      set_data(p_data);
+  }
+  MetadataFrameWrapper(const MetadataFrameWrapper &o)
+      : data_str(o.data_str), ndi_data(o.ndi_data), inner(o.inner) {
+    rebind_data();
+  }
+  MetadataFrameWrapper(MetadataFrameWrapper &&o) noexcept
+      : data_str(std::move(o.data_str)), ndi_data(o.ndi_data), inner(o.inner) {
+    rebind_data();
+  }
+  MetadataFrameWrapper &operator=(const MetadataFrameWrapper &o) {
+    data_str = o.data_str;
+    ndi_data = o.ndi_data;
+    inner = o.inner;
+    rebind_data();
+    return *this;
+  }
+  MetadataFrameWrapper &operator=(MetadataFrameWrapper &&o) noexcept {
+    data_str = std::move(o.data_str);
+    ndi_data = o.ndi_data;
+    inner = o.inner;
+    rebind_data();
+    return *this;
+  }
+  void rebind_data() {
+    // Re-point p_data only when it refers to our own copy.
+    if (inner.p_data != ndi_data)
       inner.p_data = data_str.empty() ? nullptr : data_str.data();
-    }
+  }
+  // The frame to pass back to NDI's free functions.
+  NDIlib_metadata_frame_t ndi_frame() const {
+    NDIlib_metadata_frame_t frame = inner;
+    frame.p_data = ndi_data;
+    return frame;
   }
   void set_data(const std::string &s) {
     data_str = s;
-    inner.length = static_cast<int>(data_str.size());
+    // NDI counts the terminating NUL in length.
+    inner.length = data_str.empty() ? 0 : static_cast<int>(data_str.size()) + 1;
     inner.p_data = data_str.empty() ? nullptr : data_str.data();
   }
   std::string get_data() const {
@@ -966,10 +1004,9 @@ PYBIND11_MODULE(NDIlib, m) {
       .def(py::init<int, int64_t, const char *>(), py::arg("length") = 0,
            py::arg("timecode") = NDIlib_send_timecode_synthesize,
            py::arg("p_data") = nullptr)
-      .def_property(
+      .def_property_readonly(
           "length",
-          [](const MetadataFrameWrapper &s) { return s.inner.length; },
-          [](MetadataFrameWrapper &s, int v) { s.inner.length = v; })
+          [](const MetadataFrameWrapper &s) { return s.inner.length; })
       .def_property(
           "timecode",
           [](const MetadataFrameWrapper &s) { return s.inner.timecode; },
@@ -1287,12 +1324,8 @@ PYBIND11_MODULE(NDIlib, m) {
           v = py::cast(VideoFrameV2Wrapper(video_frame));
         if (want_audio && audio_frame.p_data)
           a = py::cast(AudioFrameV2Wrapper(audio_frame));
-        if (want_metadata && metadata_frame.p_data) {
-          MetadataFrameWrapper mw(metadata_frame.length,
-                                  metadata_frame.timecode, nullptr);
-          mw.inner.p_data = metadata_frame.p_data;
-          m_obj = py::cast(std::move(mw));
-        }
+        if (want_metadata && metadata_frame.p_data)
+          m_obj = py::cast(MetadataFrameWrapper(metadata_frame));
         return py::make_tuple(type, v, a, m_obj);
       },
       py::arg("instance"), py::arg("timeout_in_ms"),
@@ -1321,12 +1354,8 @@ PYBIND11_MODULE(NDIlib, m) {
           v = py::cast(VideoFrameV2Wrapper(video_frame));
         if (want_audio && audio_frame.p_data)
           a = py::cast(AudioFrameV3Wrapper(audio_frame));
-        if (want_metadata && metadata_frame.p_data) {
-          MetadataFrameWrapper mw(metadata_frame.length,
-                                  metadata_frame.timecode, nullptr);
-          mw.inner.p_data = metadata_frame.p_data;
-          m_obj = py::cast(std::move(mw));
-        }
+        if (want_metadata && metadata_frame.p_data)
+          m_obj = py::cast(MetadataFrameWrapper(metadata_frame));
         return py::make_tuple(type, v, a, m_obj);
       },
       py::arg("instance"), py::arg("timeout_in_ms"),
@@ -1374,8 +1403,10 @@ PYBIND11_MODULE(NDIlib, m) {
       [](py::capsule instance, const MetadataFrameWrapper *p_metadata) {
         auto p_instance =
             static_cast<NDIlib_recv_instance_type *>(instance.get_pointer());
-        if (p_metadata)
-          NDIlib_recv_free_metadata(p_instance, &p_metadata->inner);
+        if (p_metadata) {
+          auto frame = p_metadata->ndi_frame();
+          NDIlib_recv_free_metadata(p_instance, &frame);
+        }
       },
       py::arg("instance"), py::arg("metadata") = nullptr);
 
@@ -1824,10 +1855,18 @@ PYBIND11_MODULE(NDIlib, m) {
          uint32_t timeout_in_ms) {
         auto p_instance =
             static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
-        py::gil_scoped_release release;
-        NDIlib_send_capture(p_instance,
-                            p_metadata ? &p_metadata->inner : nullptr,
-                            timeout_in_ms);
+        NDIlib_metadata_frame_t frame{};
+        NDIlib_frame_type_e type;
+        {
+          py::gil_scoped_release release;
+          type = NDIlib_send_capture(p_instance, p_metadata ? &frame : nullptr,
+                                     timeout_in_ms);
+        }
+        // Replace the frame even when nothing was received, so that it never
+        // keeps pointing at data freed after an earlier capture.
+        if (p_metadata)
+          *p_metadata = MetadataFrameWrapper(frame);
+        return type;
       },
       py::arg("instance"), py::arg("metadata"), py::arg("timeout_in_ms"));
 
@@ -1836,8 +1875,10 @@ PYBIND11_MODULE(NDIlib, m) {
       [](py::capsule instance, const MetadataFrameWrapper *p_metadata) {
         auto p_instance =
             static_cast<NDIlib_send_instance_type *>(instance.get_pointer());
-        NDIlib_send_free_metadata(p_instance,
-                                  p_metadata ? &p_metadata->inner : nullptr);
+        if (p_metadata) {
+          auto frame = p_metadata->ndi_frame();
+          NDIlib_send_free_metadata(p_instance, &frame);
+        }
       },
       py::arg("instance"), py::arg("metadata"));
 
