@@ -55,6 +55,11 @@ wheel.packages = ["src/NDIlib"]
 [tool.cibuildwheel]
 build = "cp311-* cp312-* cp313-* cp314-* cp315-*"
 skip = ["*-musllinux*", "*-win32", "*-manylinux_i686"]
+# Loopback tests need mDNS discovery, which CI runners can't be relied on for.
+test-requires = ["pytest"]
+test-command = 'pytest {project}/tests -m "not loopback" -p no:cacheprovider'
+# Emulated architectures run the tests too slowly to be worth it.
+test-skip = "*-*linux_{aarch64,armv7l}"
 
 [tool.cibuildwheel.linux]
 archs = ["x86_64", "aarch64", "armv7l"]
@@ -68,4 +73,3 @@ environment = { MACOSX_DEPLOYMENT_TARGET = "13.0" }
 archs = ["AMD64"]
 # CMake already bundles the NDI DLL beside the extension module.
 repair-wheel-command = ""
-test-command = 'python -c "import NDIlib"'
